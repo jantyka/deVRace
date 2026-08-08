@@ -160,6 +160,8 @@ typedef struct tHarness_game_config {
     int game_dirs_count;
     tHarness_game_dir game_dirs[10];
     char default_game[256];
+    // Pedestrian spasm fix
+    int fix_ped_spasm;
 } tHarness_game_config;
 
 extern tHarness_game_info harness_game_info;
