@@ -161,6 +161,8 @@ typedef struct tHarness_game_config {
     tHarness_game_dir game_dirs[10];
     char default_game[256];
     // Pedestrian spasm fix
+    // Round wheel models
+    int round_wheels;
     int fix_ped_spasm;
 } tHarness_game_config;
 

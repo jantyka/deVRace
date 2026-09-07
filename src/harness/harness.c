@@ -293,6 +293,8 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.physics_per_frame = 0;
     // Pedestrian spasm fix ([Slop] FixPedSpasm)
     harness_game_config.fix_ped_spasm = 0;
+    // Round wheel models ([Slop] RoundWheels)
+    harness_game_config.round_wheels = 0;
     // limit to 60 fps by default
     harness_game_config.fps = 60;
     // do not freeze timer
@@ -735,7 +737,9 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         safe_strcpy(harness_game_config.network_adapter_name, value);
     }
 
-    else if (MATCH("Slop", "FixPedSpasm")) {
+    else if (MATCH("Slop", "RoundWheels")) {
+        harness_game_config.round_wheels = (value[0] == '1');
+    } else if (MATCH("Slop", "FixPedSpasm")) {
         harness_game_config.fix_ped_spasm = (value[0] == '1');
     }
 
