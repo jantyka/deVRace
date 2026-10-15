@@ -782,6 +782,8 @@ void VR_Install(tHarness_platform* pPlatform) {
     // The headset sets the pace through xrWaitFrame. Waiting for the monitor as well would hold
     // back every headset frame when the monitor is slower (e.g. 100 Hz monitor, 144 Hz headset).
     harness_game_config.vsync = 0;
+    // With the headset on, the mouse must not wander off the game window (menu pointer)
+    harness_game_config.grab_mouse = 1;
 }
 
 void VR_Shutdown(void) {
