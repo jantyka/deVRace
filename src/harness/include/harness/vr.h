@@ -17,6 +17,10 @@ int VR_WantsEyeImages(void);
 // Returns 0 if no render target could be created.
 int VR_BeginEye(int pEye, br_pixelmap* pScreen, br_pixelmap** pColour, br_pixelmap** pDepth);
 
+// Call after the eye's scene has been rendered (BrZbSceneRenderEnd). With DEVRACE_VR_DEBUG=1 it
+// logs GL errors and sample pixels of the eye image.
+void VR_EndEye(int pEye);
+
 // Projection of an eye in BRender's convention, for BrDbSetViewToScreenOverride. The asymmetric
 // field of view comes from the runtime; hither and yon are the camera's (positive distances).
 void VR_GetEyeViewToScreen(int pEye, br_scalar pHither, br_scalar pYon, br_matrix4* pMatrix);

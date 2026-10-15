@@ -6,7 +6,8 @@
 // loading) are shown black. No head tracking yet: both eyes use the game camera.
 //
 // Debugging: DEVRACE_VR_DUMP_FRAMES=<existing directory> writes both eye images as PPM files every
-// DEVRACE_VR_DUMP_INTERVAL frames (default 90), at most VR_DUMP_MAX_FRAMES times.
+// DEVRACE_VR_DUMP_INTERVAL frames the game rendered for the headset (default 90), at most
+// VR_DUMP_MAX_FRAMES times. Frames without game images (menus) are not counted.
 
 #include "vr.h"
 #include "vr_gfx.h"
@@ -68,10 +69,12 @@ static int views_located;
 static GLuint eye_framebuffer;
 static GLuint eye_read_framebuffer;
 
+static int debug_enabled;
 static const char* dump_dir;
 static int dump_interval;
 static int dump_count;
 static unsigned long frame_index;
+static unsigned long rendered_frame_index;
 
 static int VR_Check(XrResult pResult, const char* pWhat) {
     char text[XR_MAX_RESULT_STRING_SIZE];
@@ -301,6 +304,7 @@ static int VR_Start(void) {
         return 0;
     }
 
+    debug_enabled = getenv("DEVRACE_VR_DEBUG") != NULL;
     dump_dir = getenv("DEVRACE_VR_DUMP_FRAMES");
     interval = getenv("DEVRACE_VR_DUMP_INTERVAL");
     dump_interval = interval != NULL ? atoi(interval) : 90;
@@ -364,6 +368,10 @@ static void VR_PollEvents(void) {
     }
 }
 
+static int VR_ShouldDump(void) {
+    return dump_dir != NULL && dump_count < VR_DUMP_MAX_FRAMES && rendered_frame_index % dump_interval == 0;
+}
+
 // Writes the currently bound read framebuffer as a binary PPM file (bottom-up rows flipped)
 static void VR_DumpEye(int pEye, int pWidth, int pHeight) {
     char path[1024];
@@ -372,7 +380,7 @@ static void VR_DumpEye(int pEye, int pWidth, int pHeight) {
     int y;
     int x;
 
-    snprintf(path, sizeof(path), "%s/frame-%06lu-%s.ppm", dump_dir, frame_index, pEye == 0 ? "left" : "right");
+    snprintf(path, sizeof(path), "%s/frame-%06lu-%s.ppm", dump_dir, rendered_frame_index, pEye == 0 ? "left" : "right");
     f = fopen(path, "wb");
     if (f == NULL) {
         LOG_WARN2("Cannot write %s", path);
@@ -436,7 +444,7 @@ static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view)
         glClear(GL_COLOR_BUFFER_BIT);
     }
 
-    if (dump_dir != NULL && dump_count < VR_DUMP_MAX_FRAMES && frame_index % dump_interval == 0) {
+    if (VR_ShouldDump() && target->rendered) {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, eye_framebuffer);
         VR_DumpEye(pEye, eye->width, eye->height);
     }
@@ -507,8 +515,11 @@ static void VR_Frame(void) {
             }
         }
     }
-    if (rendered && dump_dir != NULL && dump_count < VR_DUMP_MAX_FRAMES && frame_index % dump_interval == 0) {
-        dump_count++;
+    if (rendered && eye_targets[0].rendered) {
+        if (VR_ShouldDump()) {
+            dump_count++;
+        }
+        rendered_frame_index++;
     }
     frame_index++;
     for (i = 0; i < VR_EYE_COUNT; i++) {
@@ -570,6 +581,35 @@ int VR_BeginEye(int pEye, br_pixelmap* pScreen, br_pixelmap** pColour, br_pixelm
     return 1;
 }
 
+void VR_EndEye(int pEye) {
+    static const float sample_points[][2] = { { 0.5f, 0.5f }, { 0.25f, 0.25f }, { 0.75f, 0.25f }, { 0.25f, 0.75f }, { 0.75f, 0.75f } };
+    tVR_eye_target* target = &eye_targets[pEye];
+    GLint old_read_framebuffer;
+    GLenum error;
+    GLenum status;
+    unsigned char pixel[4];
+    char text[256];
+    int length;
+    size_t i;
+
+    if (!debug_enabled || rendered_frame_index % 300 != 0) {
+        return;
+    }
+    error = glGetError();
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &old_read_framebuffer);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, eye_read_framebuffer);
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target->texture, 0);
+    status = glCheckFramebufferStatus(GL_READ_FRAMEBUFFER);
+    length = snprintf(text, sizeof(text), "eye %d frame %lu: GL error 0x%x, read fbo 0x%x, pixels", pEye, rendered_frame_index, error, status);
+    for (i = 0; i < BR_ASIZE(sample_points); i++) {
+        glReadPixels((GLint)(sample_points[i][0] * target->colour->width), (GLint)(sample_points[i][1] * target->colour->height), 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel);
+        length += snprintf(text + length, sizeof(text) - length, " %02x%02x%02x", pixel[0], pixel[1], pixel[2]);
+    }
+    glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, old_read_framebuffer);
+    LOG_INFO2("%s", text);
+}
+
 void VR_GetEyeViewToScreen(int pEye, br_scalar pHither, br_scalar pYon, br_matrix4* pMatrix) {
     const XrFovf* fov = &views[pEye].fov;
     float left = tanf(fov->angleLeft);
@@ -590,6 +630,12 @@ void VR_GetEyeViewToScreen(int pEye, br_scalar pHither, br_scalar pYon, br_matri
     pMatrix->m[2][2] = (yon + hither) / (yon - hither);
     pMatrix->m[2][3] = -1.0f;
     pMatrix->m[3][2] = -2.0f * yon * hither / (yon - hither);
+
+    if (debug_enabled && rendered_frame_index == 0) {
+        LOG_INFO("eye %d: fov l %.3f r %.3f u %.3f d %.3f, hither %.4f yon %.1f, m00 %.3f m11 %.3f m20 %.3f m21 %.3f m22 %.4f m32 %.4f",
+            pEye, fov->angleLeft, fov->angleRight, fov->angleUp, fov->angleDown, (double)pHither, (double)pYon,
+            pMatrix->m[0][0], pMatrix->m[1][1], pMatrix->m[2][0], pMatrix->m[2][1], pMatrix->m[2][2], pMatrix->m[3][2]);
+    }
 }
 
 void VR_Install(tHarness_platform* pPlatform) {
