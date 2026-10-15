@@ -1899,7 +1899,8 @@ int ConditionallyFillWithSky(br_pixelmap* pPixelmap) {
 // read them directly (smoke, sparks, shadows) match the eye. The eye's camera is the game camera of
 // this frame with the head pose and eye offset from the headset on top; the game camera itself is
 // unchanged. Keep in sync with the 3D block in RenderAFrame.
-// Differences to the regular pass: the eye's asymmetric frustum and a time of 0 for smoke, sparks and proximity rays so their animation advances once per frame.
+// Differences to the regular pass: the eye's asymmetric frustum, a field of view for culling that
+// covers it, and a time of 0 for smoke, sparks and proximity rays so their animation advances once per frame.
 static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
     br_pixelmap* colour;
     br_pixelmap* depth;
@@ -1909,14 +1910,21 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
     br_matrix34 saved_camera_to_world;
     br_matrix34 camera_matrix;
     br_matrix34 eye_to_camera;
+    br_camera* camera_data;
+    br_angle saved_fov;
+    br_scalar saved_aspect;
     br_scalar left, right, top, bottom;
+    br_scalar half_width, half_height;
     int eye;
 
     if (!VR_WantsEyeImages()) {
         return;
     }
+    camera_data = gCamera->type_data;
     saved_render_screen = gRender_screen;
     saved_depth_buffer = gDepth_buffer;
+    saved_fov = camera_data->field_of_view;
+    saved_aspect = camera_data->aspect;
     BrMatrix34Copy(&saved_camera_matrix, &gCamera->t.t.mat);
     BrMatrix34Copy(&saved_camera_to_world, &gCamera_to_world);
     BrMatrix34Copy(&camera_matrix, &gCamera->t.t.mat);
@@ -1930,6 +1938,12 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
 
         VR_GetEyeFrustum(eye, &left, &right, &top, &bottom);
         BrDbSetFrustumOverride(left, right, top, bottom);
+        // Track culling (RenderTrack) works with the camera's symmetric field of view: make it
+        // cover the eye's frustum, with some margin
+        half_width = MAX(right, -left);
+        half_height = MAX(top, -bottom);
+        camera_data->field_of_view = BrRadianToAngle(2.f * atan(half_height * 1.15f));
+        camera_data->aspect = half_width / half_height;
 
         VR_GetEyeToCamera(eye, WORLD_SCALE, &eye_to_camera);
         BrMatrix34Mul(&gCamera->t.t.mat, &eye_to_camera, &camera_matrix);
@@ -1959,6 +1973,8 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
 
     gRender_screen = saved_render_screen;
     gDepth_buffer = saved_depth_buffer;
+    camera_data->field_of_view = saved_fov;
+    camera_data->aspect = saved_aspect;
     BrMatrix34Copy(&gCamera->t.t.mat, &saved_camera_matrix);
     BrMatrix34Copy(&gCamera_to_world, &saved_camera_to_world);
 }
