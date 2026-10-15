@@ -63,6 +63,8 @@ typedef struct tHarness_game_config {
     int frame_stats_interval;
     // wait for the monitor's vertical blank in OpenGL mode
     int vsync;
+    // VR: in the cockpit view, hide a bonnet the car borrows from another car
+    int vr_hide_borrowed_bonnet;
     int no_bind;
     char network_adapter_name[256];
     char platform_name[256];

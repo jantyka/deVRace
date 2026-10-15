@@ -17,6 +17,7 @@
 #include "harness/os.h"
 #include "harness/trace.h"
 #ifdef DETHRACE_VR
+#include "harness/config.h"
 #include "harness/vr.h"
 #endif
 #include "init.h"
@@ -1933,6 +1934,43 @@ static br_uint_32 VR_SkyFillColour(void) {
     return ((br_colour*)gRender_palette->pixels)[bgnd_col];
 }
 
+// VR: many cars have no bonnet model of their own; their car files point to another car's bonnet
+// (Carmageddon: EBONNET.ACT of the Eagle, Splat Pack also NWEAGBNT.ACT of the New Eagle). On the
+// monitor the 2D dashboard covers most of it, but VR shows no dashboard, so these cars would all
+// show the Eagle's bonnet. Returns non-zero if the car's bonnet belongs to another car.
+// (Showing the car's own body instead was tried: from the driver's seat one ends up inside it.)
+static int VR_HasBorrowedBonnet(tCar_spec* pCar) {
+    static const struct {
+        const char* bonnet;
+        const char* owner;
+    } shared_bonnets[] = {
+        { "EBONNET", "BLKEAGLE.TXT" },
+        { "NWEAGBNT", "NEWEAGLE.TXT" },
+    };
+    static char logged_car[32];
+    br_actor* bonnet;
+    const char* name;
+    int borrowed = 0;
+    size_t i;
+
+    bonnet = pCar->car_model_actors[pCar->car_actor_count - 1].actor;
+    name = bonnet->identifier != NULL ? bonnet->identifier : (bonnet->model != NULL ? bonnet->model->identifier : NULL);
+    if (name == NULL) {
+        return 0;
+    }
+    for (i = 0; i < COUNT_OF(shared_bonnets); i++) {
+        if (strncasecmp(name, shared_bonnets[i].bonnet, strlen(shared_bonnets[i].bonnet)) == 0
+            && strcasecmp(pCar->name, shared_bonnets[i].owner) != 0) {
+            borrowed = 1;
+        }
+    }
+    if (strcmp(logged_car, pCar->name) != 0) {
+        strncpy(logged_car, pCar->name, sizeof(logged_car) - 1);
+        LOG_INFO("VR: car %s, bonnet %s%s", pCar->name, name, borrowed ? " (borrowed, hidden in VR)" : "");
+    }
+    return borrowed;
+}
+
 // VR: renders the 3D pass of RenderAFrame once more per eye into the headset's render targets. For
 // each eye the globals the pass relies on (camera matrix and camera to world transform, render and
 // depth buffer) point to the eye while it is rendered and are restored afterwards, so helpers that
@@ -1956,6 +1994,8 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
     br_scalar saved_aspect;
     br_scalar left, right, top, bottom;
     br_scalar half_width, half_height;
+    tCar_spec* car;
+    int saved_car_actor;
     int eye;
 
     if (!VR_WantsEyeImages()) {
@@ -1970,6 +2010,14 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
     BrMatrix34Copy(&saved_camera_to_world, &gCamera_to_world);
     BrMatrix34Copy(&camera_matrix, &gCamera->t.t.mat);
     VR_RemoveCameraShear(&camera_matrix);
+    // In the cockpit view a bonnet borrowed from another car is hidden (SwitchCarActor with -1 shows
+    // none of the car's models); the regular pass keeps it under its 2D dashboard
+    car = &gProgram_state.current_car;
+    saved_car_actor = car->current_car_actor;
+    if (harness_game_config.vr_hide_borrowed_bonnet && gProgram_state.cockpit_on
+        && car->current_car_actor == car->car_actor_count - 1 && VR_HasBorrowedBonnet(car)) {
+        SwitchCarActor(car, -1);
+    }
 
     for (eye = 0; eye < VR_EYE_COUNT; eye++) {
         if (!VR_BeginEye(eye, gScreen, &colour, &depth)) {
@@ -2013,6 +2061,9 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
         VR_EndEye(eye);
     }
 
+    if (car->current_car_actor != saved_car_actor) {
+        SwitchCarActor(car, saved_car_actor);
+    }
     gRender_screen = saved_render_screen;
     gDepth_buffer = saved_depth_buffer;
     camera_data->field_of_view = saved_fov;

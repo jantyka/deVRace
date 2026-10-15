@@ -312,6 +312,8 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.verbose = 0;
     // Wait for vertical blank in OpenGL mode
     harness_game_config.vsync = 1;
+    // VR: hide bonnets borrowed from another car in the cockpit view
+    harness_game_config.vr_hide_borrowed_bonnet = 1;
 
     // install signal handler
     harness_game_config.install_signalhandler = 1;
@@ -528,6 +530,10 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.physics_per_frame = (value[0] == '1');
     } else if (MATCH("General", "VSync")) {
         harness_game_config.vsync = (value[0] == '1');
+    }
+
+    else if (MATCH("VR", "HideBorrowedBonnet")) {
+        harness_game_config.vr_hide_borrowed_bonnet = (value[0] == '1');
     }
 
     else if (MATCH("Cheats", "EditMode")) {
