@@ -1996,6 +1996,7 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
     br_scalar half_width, half_height;
     tCar_spec* car;
     int saved_car_actor;
+    tU8* saved_pipe_buffer;
     int eye;
 
     if (!VR_WantsEyeImages()) {
@@ -2018,6 +2019,10 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
         && car->current_car_actor == car->car_actor_count - 1 && VR_HasBorrowedBonnet(car)) {
         SwitchCarActor(car, -1);
     }
+    // Smoke, sparks, proximity rays and pedestrians record themselves for the action replay while
+    // they render. Only the regular pass may do that, so recording is off during the eye passes.
+    saved_pipe_buffer = gPipe_buffer_start;
+    gPipe_buffer_start = NULL;
 
     for (eye = 0; eye < VR_EYE_COUNT; eye++) {
         if (!VR_BeginEye(eye, gScreen, &colour, &depth)) {
@@ -2061,6 +2066,7 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
         VR_EndEye(eye);
     }
 
+    gPipe_buffer_start = saved_pipe_buffer;
     if (car->current_car_actor != saved_car_actor) {
         SwitchCarActor(car, saved_car_actor);
     }
