@@ -310,6 +310,8 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.no_bind = 0;
     // Disable verbose logging
     harness_game_config.verbose = 0;
+    // Wait for vertical blank in OpenGL mode
+    harness_game_config.vsync = 1;
 
     // install signal handler
     harness_game_config.install_signalhandler = 1;
@@ -524,6 +526,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         gGraf_spec_index = (value[0] == '1');
     } else if (MATCH("General", "PhysicsPerFrame")) {
         harness_game_config.physics_per_frame = (value[0] == '1');
+    } else if (MATCH("General", "VSync")) {
+        harness_game_config.vsync = (value[0] == '1');
     }
 
     else if (MATCH("Cheats", "EditMode")) {

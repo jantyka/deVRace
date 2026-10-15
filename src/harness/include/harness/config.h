@@ -61,6 +61,8 @@ typedef struct tHarness_game_config {
     int install_signalhandler;
     // interval in seconds for frame timing statistics, 0 = disabled
     int frame_stats_interval;
+    // wait for the monitor's vertical blank in OpenGL mode
+    int vsync;
     int no_bind;
     char network_adapter_name[256];
     char platform_name[256];

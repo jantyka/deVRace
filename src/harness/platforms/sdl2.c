@@ -293,7 +293,7 @@ static void SDL2_Harness_CreateWindow(const char* title, int width, int height, 
         if (gl_context == NULL) {
             LOG_PANIC2("Failed to create OpenGL context: %s", SDL2_GetError());
         }
-        SDL2_GL_SetSwapInterval(1);
+        SDL2_GL_SetSwapInterval(harness_game_config.vsync ? 1 : 0);
 
     } else {
         window = SDL2_CreateWindow(title,

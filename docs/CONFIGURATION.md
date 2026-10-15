@@ -43,6 +43,9 @@ DemoTimeout = 240
 ; Which directory in the [Games] section to run
 DefaultGame = c1
 
+; Wait for the monitor's vertical blank in 3dfx (OpenGL) mode
+VSync = 1
+
 ; Original physics updates every 40ms, causing noticable camera juddering when cornering at slow speed
 ; Enabling this runs physics every frame, smoothing movement out
 PhysicsPerFrame = 1
