@@ -6,6 +6,13 @@
 #define FOREACH_SDL3_SYM(X)                                                                             \
     X(free, void, (void *))                                                                             \
     X(Init, bool, (Uint32))                                                                             \
+    X(InitSubSystem, bool, (Uint32))                                                                    \
+    X(OpenGamepad, SDL_Gamepad*, (SDL_JoystickID))                                                      \
+    X(CloseGamepad, void, (SDL_Gamepad*))                                                               \
+    X(GetGamepadID, SDL_JoystickID, (SDL_Gamepad*))                                                     \
+    X(GetGamepadName, const char*, (SDL_Gamepad*))                                                      \
+    X(GetGamepadButton, bool, (SDL_Gamepad*, SDL_GamepadButton))                                        \
+    X(GetGamepadAxis, Sint16, (SDL_Gamepad*, SDL_GamepadAxis))                                          \
     X(Quit, void, (void))                                                                               \
     X(Delay, void, (Uint32))                                                                            \
     X(GetTicks, Uint64, (void))                                                                         \

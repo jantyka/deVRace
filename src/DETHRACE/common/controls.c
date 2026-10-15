@@ -2037,6 +2037,8 @@ void PollCarControls(tU32 pTime_difference) {
                 keys.horn = 1;
             }
         }
+        // Added by dethrace: analog steering and pedals from a gamepad
+        PDGamepadSetCarControls(&joystick, &keys);
         c->keys = keys;
         c->joystick = joystick;
     }

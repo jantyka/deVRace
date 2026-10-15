@@ -65,6 +65,10 @@ extern tS32 gJoystick_min1x;
 
 void PDSetKeyArray(int* pKeys, int pMark);
 
+// Added by dethrace: gamepad support (pc-all/allgamepad.c)
+void PDGamepadSetKeyArray(int* pKeys, int pMark);
+void PDGamepadSetCarControls(tJoystick* pJoystick, tCar_controls* pKeys);
+
 int PDGetASCIIFromKey(int pKey);
 
 void PDFatalError(char* pThe_str);

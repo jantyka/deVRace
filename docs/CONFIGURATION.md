@@ -49,6 +49,9 @@ VSync = 1
 ; Keep the mouse pointer inside the game window
 GrabMouse = 0
 
+; Use a connected gamepad (layout in src/DETHRACE/pc-all/allgamepad.c)
+Gamepad = 1
+
 ; Original physics updates every 40ms, causing noticable camera juddering when cornering at slow speed
 ; Enabling this runs physics every frame, smoothing movement out
 PhysicsPerFrame = 1
