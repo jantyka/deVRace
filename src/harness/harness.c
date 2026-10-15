@@ -314,8 +314,14 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.vsync = 1;
     // VR: hide bonnets borrowed from another car in the cockpit view
     harness_game_config.vr_hide_borrowed_bonnet = 1;
-    // VR: HUD during the race on
+    // VR: HUD during the race on, with all its elements
     harness_game_config.vr_hud = 1;
+    harness_game_config.vr_hud_dimming = 1;
+    harness_game_config.vr_hud_damage = 1;
+    harness_game_config.vr_hud_pratcam = 1;
+    harness_game_config.vr_hud_messages = 1;
+    harness_game_config.vr_hud_instruments = 1;
+    harness_game_config.vr_hud_powerups = 1;
     // VR: HUD and menus on a quad 1.8 m ahead, 1.6 m wide
     harness_game_config.vr_hud_distance = 1.8f;
     harness_game_config.vr_hud_width = 1.6f;
@@ -543,6 +549,18 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.vr_hide_borrowed_bonnet = (value[0] == '1');
     } else if (MATCH("VR", "Hud")) {
         harness_game_config.vr_hud = (value[0] == '1');
+    } else if (MATCH("VR", "HudDimming")) {
+        harness_game_config.vr_hud_dimming = (value[0] == '1');
+    } else if (MATCH("VR", "HudDamage")) {
+        harness_game_config.vr_hud_damage = (value[0] == '1');
+    } else if (MATCH("VR", "HudPratcam")) {
+        harness_game_config.vr_hud_pratcam = (value[0] == '1');
+    } else if (MATCH("VR", "HudMessages")) {
+        harness_game_config.vr_hud_messages = (value[0] == '1');
+    } else if (MATCH("VR", "HudInstruments")) {
+        harness_game_config.vr_hud_instruments = (value[0] == '1');
+    } else if (MATCH("VR", "HudPowerups")) {
+        harness_game_config.vr_hud_powerups = (value[0] == '1');
     } else if (MATCH("VR", "HudDistance")) {
         harness_game_config.vr_hud_distance = atof(value);
     } else if (MATCH("VR", "HudWidth")) {

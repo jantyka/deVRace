@@ -1911,6 +1911,10 @@ static void VR_RemoveCameraShear(br_matrix34* pMatrix) {
     BrVector3Cross(x, y, z);
 }
 
+// VR: HUD elements can be switched off one by one ([VR] Hud...) while the headset shows the race.
+// They are left out of the 2D overlay, so the monitor does not show them either.
+#define VR_SHOW_HUD(pElement) (!VR_WantsEyeImages() || harness_game_config.vr_hud_##pElement)
+
 // VR: in 3dfx mode a few 2D elements (pratcam, dimmed rectangles) are drawn as 3D scenes through
 // g2d_camera straight into the monitor image, so the HUD quad's capture of the 2D overlay misses
 // them. Called right after such a scene, it draws the same scene into the HUD quad as well.
@@ -2500,20 +2504,38 @@ void RenderAFrame(int pDepth_mask_on) {
             }
         }
 #endif
-        DimAFewBits();
-        DoDamageScreen(the_time);
+#ifdef DETHRACE_VR
+        if (VR_SHOW_HUD(dimming))
+#endif
+            DimAFewBits();
+#ifdef DETHRACE_VR
+        if (VR_SHOW_HUD(damage))
+#endif
+            DoDamageScreen(the_time);
         if (!gAction_replay_mode || gAR_fudge_headups) {
             // Added by dethrace
             // Pratcam is drawn on top of the 2d cockpit, so we must ensure that all the 2d pixel
             // writes have been flushed to the framebuffer first
             BrPixelmapFlush(gBack_screen);
-            DoPratcam(the_time);
-            DoHeadups(the_time);
+#ifdef DETHRACE_VR
+            if (VR_SHOW_HUD(pratcam))
+#endif
+                DoPratcam(the_time);
+#ifdef DETHRACE_VR
+            if (VR_SHOW_HUD(messages))
+#endif
+                DoHeadups(the_time);
         }
-        DoInstruments(the_time);
+#ifdef DETHRACE_VR
+        if (VR_SHOW_HUD(instruments))
+#endif
+            DoInstruments(the_time);
         DoSteeringWheel(the_time);
         if (!gAction_replay_mode || gAR_fudge_headups) {
-            DrawPowerups(the_time);
+#ifdef DETHRACE_VR
+            if (VR_SHOW_HUD(powerups))
+#endif
+                DrawPowerups(the_time);
         }
     }
     if (gNet_mode != eNet_mode_none) {
