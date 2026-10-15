@@ -66,7 +66,9 @@ static XrViewConfigurationView view_configs[VR_EYE_COUNT];
 static XrView views[VR_EYE_COUNT];
 static tVR_eye_swapchain eye_swapchains[VR_EYE_COUNT];
 static tVR_eye_target eye_targets[VR_EYE_COUNT];
-static int views_located;
+static XrFrameState frame_state;
+static int frame_begun;
+static int views_valid;
 static GLuint eye_framebuffer;
 static GLuint eye_read_framebuffer;
 
@@ -476,43 +478,25 @@ static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view)
     return 1;
 }
 
-static void VR_Frame(void) {
-    XrFrameWaitInfo wait_info = { .type = XR_TYPE_FRAME_WAIT_INFO };
-    XrFrameState frame_state = { .type = XR_TYPE_FRAME_STATE };
-    XrFrameBeginInfo begin_info = { .type = XR_TYPE_FRAME_BEGIN_INFO };
+// Hands the eye images of the frame in progress to the runtime. They were rendered with the views
+// located in VR_BeginNextFrame, which are submitted unchanged with them.
+static void VR_EndCurrentFrame(void) {
     XrFrameEndInfo end_info = { .type = XR_TYPE_FRAME_END_INFO };
-    XrViewLocateInfo locate_info = { .type = XR_TYPE_VIEW_LOCATE_INFO };
-    XrViewState view_state = { .type = XR_TYPE_VIEW_STATE };
     XrCompositionLayerProjection layer = { .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION };
     XrCompositionLayerProjectionView layer_views[VR_EYE_COUNT];
     const XrCompositionLayerBaseHeader* layers[1];
-    uint32_t view_count;
     int rendered = 0;
     int i;
 
-    VR_PollEvents();
-    if (!session_running) {
+    if (!frame_begun) {
         return;
     }
+    frame_begun = 0;
 
-    if (!VR_Check(xrWaitFrame(session, &wait_info, &frame_state), "xrWaitFrame")) {
-        return;
-    }
-    if (!VR_Check(xrBeginFrame(session, &begin_info), "xrBeginFrame")) {
-        return;
-    }
-
-    if (frame_state.shouldRender) {
-        locate_info.viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
-        locate_info.displayTime = frame_state.predictedDisplayTime;
-        locate_info.space = space;
-        if (VR_Check(xrLocateViews(session, &locate_info, &view_state, VR_EYE_COUNT, &view_count, views), "xrLocateViews")
-            && (view_state.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT)) {
-            views_located = 1;
-            rendered = 1;
-            for (i = 0; i < VR_EYE_COUNT && rendered; i++) {
-                rendered = VR_RenderEye(i, &layer_views[i]);
-            }
+    if (frame_state.shouldRender && views_valid) {
+        rendered = 1;
+        for (i = 0; i < VR_EYE_COUNT && rendered; i++) {
+            rendered = VR_RenderEye(i, &layer_views[i]);
         }
     }
     if (rendered && eye_targets[0].rendered) {
@@ -537,6 +521,42 @@ static void VR_Frame(void) {
     VR_Check(xrEndFrame(session, &end_info), "xrEndFrame");
 }
 
+// Waits for the next headset frame, begins it and locates the eyes for its predicted display time.
+// The game then renders its next frame with these views.
+static void VR_BeginNextFrame(void) {
+    XrFrameWaitInfo wait_info = { .type = XR_TYPE_FRAME_WAIT_INFO };
+    XrFrameBeginInfo begin_info = { .type = XR_TYPE_FRAME_BEGIN_INFO };
+    XrViewLocateInfo locate_info = { .type = XR_TYPE_VIEW_LOCATE_INFO };
+    XrViewState view_state = { .type = XR_TYPE_VIEW_STATE };
+    uint32_t view_count;
+
+    VR_PollEvents();
+    if (!session_running) {
+        return;
+    }
+
+    frame_state.type = XR_TYPE_FRAME_STATE;
+    frame_state.next = NULL;
+    if (!VR_Check(xrWaitFrame(session, &wait_info, &frame_state), "xrWaitFrame")) {
+        return;
+    }
+    if (!VR_Check(xrBeginFrame(session, &begin_info), "xrBeginFrame")) {
+        return;
+    }
+    frame_begun = 1;
+
+    views_valid = 0;
+    if (frame_state.shouldRender) {
+        locate_info.viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+        locate_info.displayTime = frame_state.predictedDisplayTime;
+        locate_info.space = space;
+        if (VR_Check(xrLocateViews(session, &locate_info, &view_state, VR_EYE_COUNT, &view_count, views), "xrLocateViews")
+            && (view_state.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT)) {
+            views_valid = 1;
+        }
+    }
+}
+
 static void VR_Swap(br_pixelmap* back_buffer) {
     original_swap(back_buffer);
 
@@ -544,13 +564,18 @@ static void VR_Swap(br_pixelmap* back_buffer) {
         // First swap: the OpenGL context exists and glrend has loaded the GL functions
         vr_state = VR_Start() ? eVR_state_active : eVR_state_disabled;
     }
+    // Order of the OpenXR frame loop across the game's frames: the images of frame N are submitted
+    // here, then frame N+1 begins and the game renders it with the views located for it
     if (vr_state == eVR_state_active) {
-        VR_Frame();
+        VR_EndCurrentFrame();
+    }
+    if (vr_state == eVR_state_active) {
+        VR_BeginNextFrame();
     }
 }
 
 int VR_WantsEyeImages(void) {
-    return vr_state == eVR_state_active && session_running && views_located;
+    return vr_state == eVR_state_active && frame_begun && frame_state.shouldRender && views_valid;
 }
 
 int VR_BeginEye(int pEye, br_pixelmap* pScreen, br_pixelmap** pColour, br_pixelmap** pDepth) {
@@ -673,7 +698,8 @@ void VR_Shutdown(void) {
     }
     session_running = 0;
     session_state = XR_SESSION_STATE_UNKNOWN;
-    views_located = 0;
+    frame_begun = 0;
+    views_valid = 0;
     // The render targets belong to the GL context, which may already be gone; only forget them
     memset(eye_targets, 0, sizeof(eye_targets));
 }
