@@ -21,6 +21,7 @@
     X(GetWindowSize, bool, (SDL_Window*, int*, int*))                                                   \
     X(HideCursor, bool, (void))                                                                         \
     X(SetWindowFullscreen, bool, (SDL_Window*, bool))                                                   \
+    X(SetWindowMouseGrab, bool, (SDL_Window*, bool))                                                    \
     X(SetWindowSize, bool, (SDL_Window*, int, int))                                                     \
     X(CreateRenderer, SDL_Renderer*, (SDL_Window*, const char*))                                        \
     X(RenderClear, bool, (SDL_Renderer*))                                                               \

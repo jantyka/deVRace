@@ -530,6 +530,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.physics_per_frame = (value[0] == '1');
     } else if (MATCH("General", "VSync")) {
         harness_game_config.vsync = (value[0] == '1');
+    } else if (MATCH("General", "GrabMouse")) {
+        harness_game_config.grab_mouse = (value[0] == '1');
     }
 
     else if (MATCH("VR", "HideBorrowedBonnet")) {

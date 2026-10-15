@@ -63,6 +63,8 @@ typedef struct tHarness_game_config {
     int frame_stats_interval;
     // wait for the monitor's vertical blank in OpenGL mode
     int vsync;
+    // keep the mouse pointer inside the game window
+    int grab_mouse;
     // VR: in the cockpit view, hide a bonnet the car borrows from another car
     int vr_hide_borrowed_bonnet;
     int no_bind;

@@ -17,6 +17,7 @@
     X(GetWindowID, Uint32, (SDL_Window*))                                               \
     X(GetWindowSize, void, (SDL_Window*, int*, int*))                                   \
     X(SetWindowFullscreen, int, (SDL_Window*, Uint32))                                  \
+    X(SetWindowGrab, void, (SDL_Window*, SDL_bool))                                     \
     X(SetWindowSize, void, (SDL_Window*, int, int))                                     \
     X(CreateRenderer, SDL_Renderer*, (SDL_Window*, int, Uint32))                        \
     X(RenderClear, int, (SDL_Renderer*))                                                \

@@ -324,6 +324,9 @@ static void SDL2_Harness_CreateWindow(const char* title, int width, int height, 
     }
 
     SDL2_ShowCursor(SDL_DISABLE);
+    if (harness_game_config.grab_mouse) {
+        SDL2_SetWindowGrab(window, SDL_TRUE);
+    }
 
     viewport.x = 0;
     viewport.y = 0;
