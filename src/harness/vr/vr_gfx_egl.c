@@ -52,9 +52,3 @@ const void* VR_Gfx_GetSessionBinding(void) {
     binding.context = context;
     return &binding;
 }
-
-void VR_Gfx_DisableVsync(void) {
-    if (!eglSwapInterval(eglGetCurrentDisplay(), 0)) {
-        LOG_WARN2("eglSwapInterval failed: 0x%x", eglGetError());
-    }
-}

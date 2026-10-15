@@ -12,6 +12,7 @@
 #include "vr.h"
 #include "vr_gfx.h"
 
+#include "include/harness/config.h"
 #include "include/harness/trace.h"
 #include "include/harness/vr.h"
 
@@ -314,7 +315,6 @@ static int VR_Start(void) {
     if (dump_dir != NULL) {
         LOG_INFO("Writing eye images to %s every %d frames", dump_dir, dump_interval);
     }
-    VR_Gfx_DisableVsync();
     return 1;
 }
 
@@ -644,6 +644,9 @@ void VR_Install(tHarness_platform* pPlatform) {
     }
     original_swap = pPlatform->Swap;
     pPlatform->Swap = VR_Swap;
+    // The headset sets the pace through xrWaitFrame. Waiting for the monitor as well would hold
+    // back every headset frame when the monitor is slower (e.g. 100 Hz monitor, 144 Hz headset).
+    harness_game_config.vsync = 0;
 }
 
 void VR_Shutdown(void) {
