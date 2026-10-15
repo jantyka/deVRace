@@ -56,6 +56,15 @@ target_sources(harness PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/version.h"
 )
 
+if(DETHRACE_VR)
+    if(NOT UNIX OR APPLE)
+        message(FATAL_ERROR "DETHRACE_VR is currently only supported on Linux")
+    endif()
+    find_package(OpenXR CONFIG REQUIRED)
+    find_package(OpenGL REQUIRED COMPONENTS EGL)
+    target_compile_definitions(harness PRIVATE DETHRACE_VR)
+endif()
+
 if(DETHRACE_SOUND_ENABLED)
     target_sources(harness PRIVATE audio/miniaudio.c)
     target_link_libraries(harness PRIVATE miniaudio stb)

@@ -51,6 +51,14 @@ static const tPlatform_bootstrap* platform_bootstraps[] = {
         (DEST)[sizeof(DEST) - 1] = '\0';      \
     } while (0)
 
+// Name of the directory for dethrace.ini below the user's preferences path
+#ifdef DETHRACE_VR
+// VR: own configuration directory, so a regular Dethrace setup is never touched
+#define HARNESS_PREF_PATH_NAME "devrace"
+#else
+#define HARNESS_PREF_PATH_NAME "dethrace"
+#endif
+
 // SplatPack or Carmageddon. This is where we represent the code differences between the two. For example, the intro smack file.
 tHarness_game_info harness_game_info;
 
@@ -249,7 +257,7 @@ void Harness_DetectAndSetWorkingDirectory(char* argv0) {
         if (access("DATA/GENERAL.TXT", F_OK) == 0) {
             // good, found
         } else {
-            OS_GetPrefPath(pref_path, "dethrace");
+            OS_GetPrefPath(pref_path, HARNESS_PREF_PATH_NAME);
             path = pref_path;
         }
     }
@@ -555,7 +563,7 @@ int Harness_ProcessIniFile(void) {
     int i;
     char path[1024];
 
-    if (OS_GetPrefPath(path, "dethrace")) {
+    if (OS_GetPrefPath(path, HARNESS_PREF_PATH_NAME)) {
         strcpy(path, "./");
     }
     strcat(path, "dethrace.ini");

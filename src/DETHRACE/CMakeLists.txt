@@ -22,6 +22,9 @@ else()
         ${CMAKE_SOURCE_DIR}/packaging/macos/dethrace.icns
         ${CMAKE_SOURCE_DIR}/packaging/windows/dethrace.rc
     )
+    if(DETHRACE_VR)
+        set_target_properties(dethrace PROPERTIES OUTPUT_NAME "devrace")
+    endif()
     get_property(build_rpaths GLOBAL PROPERTY DETHRACE_BUILD_RPATHS)
     set_property(TARGET dethrace APPEND PROPERTY BUILD_RPATH "${build_rpaths}")
 
