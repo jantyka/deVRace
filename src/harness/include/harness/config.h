@@ -67,6 +67,11 @@ typedef struct tHarness_game_config {
     int grab_mouse;
     // VR: in the cockpit view, hide a bonnet the car borrows from another car
     int vr_hide_borrowed_bonnet;
+    // VR: show the HUD during the race (menus are always shown)
+    int vr_hud;
+    // VR: distance and width of the HUD/menu quad in metres
+    float vr_hud_distance;
+    float vr_hud_width;
     int no_bind;
     char network_adapter_name[256];
     char platform_name[256];

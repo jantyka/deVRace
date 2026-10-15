@@ -1911,6 +1911,18 @@ static void VR_RemoveCameraShear(br_matrix34* pMatrix) {
     BrVector3Cross(x, y, z);
 }
 
+// VR: in 3dfx mode a few 2D elements (pratcam, dimmed rectangles) are drawn as 3D scenes through
+// g2d_camera straight into the monitor image, so the HUD quad's capture of the 2D overlay misses
+// them. Called right after such a scene, it draws the same scene into the HUD quad as well.
+void VR_Render2DSceneOnHud(void) {
+    br_pixelmap* colour;
+    br_pixelmap* depth;
+
+    if (VR_GetHudTarget(&colour, &depth)) {
+        BrZbSceneRender(g2d_camera, g2d_camera, colour, depth);
+    }
+}
+
 // VR: background colour of the eye images, as ConditionallyFillWithSky picks it for the regular pass
 // on tracks without a sky texture (or inside special volumes with their own sky colour): the fog
 // colour, the volume's sky colour or black. With a sky texture the sky covers the background anyway.
@@ -2113,6 +2125,12 @@ void RenderAFrame(int pDepth_mask_on) {
     old_pixels = gRender_screen->pixels;
     cockpit_on = gProgram_state.cockpit_on && gProgram_state.cockpit_image_index >= 0 && !gMap_mode;
     gMirror_on__graphics = gProgram_state.mirror_on && cockpit_on && gProgram_state.which_view == eView_forward;
+#ifdef DETHRACE_VR
+    // VR: no rear view mirror in the headset yet (it belongs to the 2D dashboard, which VR leaves out)
+    if (VR_WantsEyeImages()) {
+        gMirror_on__graphics = 0;
+    }
+#endif
     if (gMap_mode) {
         real_origin_x = gBack_screen->origin_x;
         real_origin_y = gBack_screen->origin_y;
@@ -2227,6 +2245,10 @@ void RenderAFrame(int pDepth_mask_on) {
     gRendering_mirror = 0;
     DoSpecialCameraEffect(gCamera, &gCamera_to_world);
 
+#ifdef DETHRACE_VR
+    // VR: the background fill is 2D, but only belongs behind the monitor's 3D image, not on the HUD quad
+    VR_PauseHudCapture(1);
+#endif
 #ifdef DETHRACE_3DFX_PATCH
     if (!ConditionallyFillWithSky(gRender_screen->width == gBack_screen->width ? gBack_screen : gRender_screen)
 #else
@@ -2241,6 +2263,9 @@ void RenderAFrame(int pDepth_mask_on) {
             ExternalSky(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world);
         }
     }
+#ifdef DETHRACE_VR
+    VR_PauseHudCapture(0);
+#endif
 
 #ifdef DETHRACE_3DFX_PATCH
     PDUnlockRealBackScreen(1);
@@ -2280,7 +2305,12 @@ void RenderAFrame(int pDepth_mask_on) {
 
     BrMatrix34Copy(&gCamera->t.t.mat, &old_camera_matrix);
 #ifdef DETHRACE_3DFX_PATCH
-    if (cockpit_on) {
+    if (cockpit_on
+#ifdef DETHRACE_VR
+        // VR: no 2D dashboard (design decision; it would cover the HUD quad)
+        && !VR_WantsEyeImages()
+#endif
+    ) {
         PDUnlockRealBackScreen(1);
         PDLockRealBackScreen(1);
         CopyStripImage(

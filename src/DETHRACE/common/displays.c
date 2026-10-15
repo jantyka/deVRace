@@ -315,6 +315,9 @@ void DeviouslyDimRectangle(br_pixelmap* pPixelmap, int pLeft, int pTop, int pRig
     gDim_actor->render_style = BR_RSTYLE_FACES;
     PDUnlockRealBackScreen(1);
     BrZbSceneRender(g2d_camera, g2d_camera, gBack_screen, gDepth_buffer);
+#ifdef DETHRACE_VR
+    VR_Render2DSceneOnHud();
+#endif
     PDLockRealBackScreen(1);
     gDim_actor->render_style = BR_RSTYLE_NONE;
 }

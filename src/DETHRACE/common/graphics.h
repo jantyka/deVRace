@@ -186,6 +186,10 @@ int ConditionallyFillWithSky(br_pixelmap* pPixelmap);
 
 void RenderAFrame(int pDepth_mask_on);
 
+#ifdef DETHRACE_VR
+void VR_Render2DSceneOnHud(void);
+#endif
+
 void InitPaletteAnimate(void);
 
 void RevertPalette(void);

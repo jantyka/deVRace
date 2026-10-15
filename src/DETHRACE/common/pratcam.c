@@ -552,6 +552,9 @@ void DoPratcam(tU32 pThe_time) {
         BrMapAdd(gPrat_buffer);
         BrMaterialUpdate(gPrat_material, BR_MATU_ALL);
         BrZbSceneRender(g2d_camera, g2d_camera, gBack_screen, gDepth_buffer);
+#ifdef DETHRACE_VR
+        VR_Render2DSceneOnHud();
+#endif
         BrMapRemove(gPrat_buffer);
         gPrat_actor->render_style = BR_RSTYLE_NONE;
     } else {

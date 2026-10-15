@@ -3,7 +3,8 @@
 //
 // The game renders its 3D pass once per eye into a render target (see harness/vr.h); on the next
 // swap the images are copied into the headset's swapchains. Eyes without an image this frame (menus,
-// loading) are shown black. No head tracking yet: both eyes use the game camera.
+// loading) are shown black. The 2D overlay (menus, HUD) is captured separately by glrend and shown
+// on a quad layer in front of the player.
 //
 // Debugging: DEVRACE_VR_DUMP_FRAMES=<existing directory> writes both eye images as PPM files every
 // DEVRACE_VR_DUMP_INTERVAL frames the game rendered for the headset (default 90), at most
@@ -36,6 +37,7 @@ typedef enum tVR_state {
     eVR_state_disabled,
 } tVR_state;
 
+// A swapchain with its images, for an eye or the HUD quad
 typedef struct tVR_eye_swapchain {
     XrSwapchain handle;
     int32_t width;
@@ -71,6 +73,14 @@ static int frame_begun;
 static int views_valid;
 static GLuint eye_framebuffer;
 static GLuint eye_read_framebuffer;
+static int64_t swapchain_format;
+
+// HUD quad: glrend draws every 2D overlay flush into hud_target as well
+static tVR_eye_swapchain hud_swapchain;
+static br_pixelmap* hud_screen;
+static br_pixelmap* hud_target;
+static br_pixelmap* hud_depth;
+static GLuint hud_texture;
 
 static int debug_enabled;
 static const char* dump_dir;
@@ -253,45 +263,69 @@ static int64_t VR_ChooseSwapchainFormat(void) {
     return chosen;
 }
 
-static int VR_CreateSwapchains(void) {
+static int VR_CreateSwapchain(tVR_eye_swapchain* pSwapchain, int32_t pWidth, int32_t pHeight) {
     XrSwapchainCreateInfo create_info = { .type = XR_TYPE_SWAPCHAIN_CREATE_INFO };
-    int i;
-    uint32_t j;
+    uint32_t i;
 
-    create_info.format = VR_ChooseSwapchainFormat();
-    if (create_info.format == 0) {
-        return 0;
-    }
+    create_info.format = swapchain_format;
     create_info.usageFlags = XR_SWAPCHAIN_USAGE_COLOR_ATTACHMENT_BIT | XR_SWAPCHAIN_USAGE_TRANSFER_SRC_BIT;
     create_info.sampleCount = 1;
     create_info.faceCount = 1;
     create_info.arraySize = 1;
     create_info.mipCount = 1;
+    create_info.width = pWidth;
+    create_info.height = pHeight;
+    if (!VR_Check(xrCreateSwapchain(session, &create_info, &pSwapchain->handle), "xrCreateSwapchain")) {
+        return 0;
+    }
+    pSwapchain->width = pWidth;
+    pSwapchain->height = pHeight;
+    xrEnumerateSwapchainImages(pSwapchain->handle, 0, &pSwapchain->image_count, NULL);
+    pSwapchain->images = calloc(pSwapchain->image_count, sizeof(*pSwapchain->images));
+    for (i = 0; i < pSwapchain->image_count; i++) {
+        pSwapchain->images[i].type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
+    }
+    return VR_Check(xrEnumerateSwapchainImages(pSwapchain->handle, pSwapchain->image_count, &pSwapchain->image_count, (XrSwapchainImageBaseHeader*)pSwapchain->images), "xrEnumerateSwapchainImages");
+}
 
+static int VR_CreateSwapchains(void) {
+    int i;
+
+    swapchain_format = VR_ChooseSwapchainFormat();
+    if (swapchain_format == 0) {
+        return 0;
+    }
     for (i = 0; i < VR_EYE_COUNT; i++) {
-        tVR_eye_swapchain* eye = &eye_swapchains[i];
-
-        create_info.width = view_configs[i].recommendedImageRectWidth;
-        create_info.height = view_configs[i].recommendedImageRectHeight;
-        if (!VR_Check(xrCreateSwapchain(session, &create_info, &eye->handle), "xrCreateSwapchain")) {
-            return 0;
-        }
-        eye->width = create_info.width;
-        eye->height = create_info.height;
-        xrEnumerateSwapchainImages(eye->handle, 0, &eye->image_count, NULL);
-        eye->images = calloc(eye->image_count, sizeof(*eye->images));
-        for (j = 0; j < eye->image_count; j++) {
-            eye->images[j].type = XR_TYPE_SWAPCHAIN_IMAGE_OPENGL_KHR;
-        }
-        if (!VR_Check(xrEnumerateSwapchainImages(eye->handle, eye->image_count, &eye->image_count, (XrSwapchainImageBaseHeader*)eye->images), "xrEnumerateSwapchainImages")) {
+        if (!VR_CreateSwapchain(&eye_swapchains[i], view_configs[i].recommendedImageRectWidth, view_configs[i].recommendedImageRectHeight)) {
             return 0;
         }
     }
     glGenFramebuffers(1, &eye_framebuffer);
     glGenFramebuffers(1, &eye_read_framebuffer);
     LOG_INFO("Swapchains: %dx%d per eye, format 0x%llx, %u images", eye_swapchains[0].width, eye_swapchains[0].height,
-        (unsigned long long)create_info.format, eye_swapchains[0].image_count);
+        (unsigned long long)swapchain_format, eye_swapchains[0].image_count);
     return 1;
+}
+
+// The HUD quad has the size of the game's screen. Without it the game still runs in VR, only
+// menus and HUD are missing in the headset.
+static void VR_StartHud(br_pixelmap* pScreen) {
+    if (!VR_CreateSwapchain(&hud_swapchain, pScreen->width, pScreen->height)) {
+        LOG_WARN2("%s", "No HUD swapchain, menus and HUD stay on the monitor");
+        return;
+    }
+    hud_target = BrPixelmapMatchTypedSized(pScreen, BR_PMMATCH_HIDDEN, BR_PMT_RGBA_8888, pScreen->width, pScreen->height);
+    if (hud_target == NULL || BrPixelmapQuery(hud_target, &hud_texture, BRT_OPENGL_TEXTURE_U32) != BRE_OK || hud_texture == 0) {
+        LOG_WARN2("%s", "No HUD render target, menus and HUD stay on the monitor");
+        hud_target = NULL;
+        return;
+    }
+    hud_depth = BrPixelmapMatch(hud_target, BR_PMMATCH_DEPTH_16);
+    hud_screen = pScreen;
+    BrPixelmapFill(hud_target, 0);
+    BrGLRendSetOverlayCapture(hud_screen, hud_target);
+    LOG_INFO("HUD quad: %dx%d, %.2f m wide at %.2f m", hud_swapchain.width, hud_swapchain.height,
+        (double)harness_game_config.vr_hud_width, (double)harness_game_config.vr_hud_distance);
 }
 
 static int VR_Start(void) {
@@ -375,14 +409,14 @@ static int VR_ShouldDump(void) {
 }
 
 // Writes the currently bound read framebuffer as a binary PPM file (bottom-up rows flipped)
-static void VR_DumpEye(int pEye, int pWidth, int pHeight) {
+static void VR_DumpImage(const char* pName, int pWidth, int pHeight) {
     char path[1024];
     unsigned char* pixels;
     FILE* f;
     int y;
     int x;
 
-    snprintf(path, sizeof(path), "%s/frame-%06lu-%s.ppm", dump_dir, rendered_frame_index, pEye == 0 ? "left" : "right");
+    snprintf(path, sizeof(path), "%s/frame-%06lu-%s.ppm", dump_dir, rendered_frame_index, pName);
     f = fopen(path, "wb");
     if (f == NULL) {
         LOG_WARN2("Cannot write %s", path);
@@ -401,9 +435,9 @@ static void VR_DumpEye(int pEye, int pWidth, int pHeight) {
     free(pixels);
 }
 
-static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view) {
-    tVR_eye_swapchain* eye = &eye_swapchains[pEye];
-    tVR_eye_target* target = &eye_targets[pEye];
+// Copies a texture of the swapchain's size into its next image (pTexture 0: clears it to black).
+// pDump_name: written as PPM when dumping is due, NULL for never.
+static int VR_CopyToSwapchain(tVR_eye_swapchain* pSwapchain, GLuint pTexture, const char* pDump_name) {
     XrSwapchainImageAcquireInfo acquire_info = { .type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
     XrSwapchainImageWaitInfo wait_info = { .type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
     XrSwapchainImageReleaseInfo release_info = { .type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
@@ -415,11 +449,11 @@ static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view)
     GLboolean old_colour_mask[4];
     GLboolean old_scissor;
 
-    if (!VR_Check(xrAcquireSwapchainImage(eye->handle, &acquire_info, &image_index), "xrAcquireSwapchainImage")) {
+    if (!VR_Check(xrAcquireSwapchainImage(pSwapchain->handle, &acquire_info, &image_index), "xrAcquireSwapchainImage")) {
         return 0;
     }
     wait_info.timeout = XR_INFINITE_DURATION;
-    if (!VR_Check(xrWaitSwapchainImage(eye->handle, &wait_info), "xrWaitSwapchainImage")) {
+    if (!VR_Check(xrWaitSwapchainImage(pSwapchain->handle, &wait_info), "xrWaitSwapchainImage")) {
         return 0;
     }
 
@@ -432,23 +466,23 @@ static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view)
     old_scissor = glIsEnabled(GL_SCISSOR_TEST);
 
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, eye_framebuffer);
-    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, eye->images[image_index].image, 0);
-    glViewport(0, 0, eye->width, eye->height);
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pSwapchain->images[image_index].image, 0);
+    glViewport(0, 0, pSwapchain->width, pSwapchain->height);
     glDisable(GL_SCISSOR_TEST);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    if (target->rendered && target->texture != 0) {
+    if (pTexture != 0) {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, eye_read_framebuffer);
-        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target->texture, 0);
-        glBlitFramebuffer(0, 0, eye->width, eye->height, 0, 0, eye->width, eye->height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pTexture, 0);
+        glBlitFramebuffer(0, 0, pSwapchain->width, pSwapchain->height, 0, 0, pSwapchain->width, pSwapchain->height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
         glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
     } else {
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
     }
 
-    if (VR_ShouldDump() && target->rendered) {
+    if (pDump_name != NULL && VR_ShouldDump()) {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, eye_framebuffer);
-        VR_DumpEye(pEye, eye->width, eye->height);
+        VR_DumpImage(pDump_name, pSwapchain->width, pSwapchain->height);
     }
 
     glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
@@ -461,10 +495,16 @@ static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view)
         glEnable(GL_SCISSOR_TEST);
     }
 
-    if (!VR_Check(xrReleaseSwapchainImage(eye->handle, &release_info), "xrReleaseSwapchainImage")) {
+    return VR_Check(xrReleaseSwapchainImage(pSwapchain->handle, &release_info), "xrReleaseSwapchainImage");
+}
+
+static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view) {
+    tVR_eye_swapchain* eye = &eye_swapchains[pEye];
+    tVR_eye_target* target = &eye_targets[pEye];
+
+    if (!VR_CopyToSwapchain(eye, target->rendered ? target->texture : 0, target->rendered ? (pEye == 0 ? "left" : "right") : NULL)) {
         return 0;
     }
-
     pLayer_view->type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
     pLayer_view->next = NULL;
     pLayer_view->pose = views[pEye].pose;
@@ -478,13 +518,44 @@ static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view)
     return 1;
 }
 
+// HUD quad in front of the player, in the space of the eyes (relative to the head position when the
+// session started). Transparent where the game drew no 2D overlay this frame.
+static int VR_RenderHud(XrCompositionLayerQuad* pLayer) {
+    if (hud_target == NULL || !VR_CopyToSwapchain(&hud_swapchain, hud_texture, "hud")) {
+        return 0;
+    }
+    pLayer->type = XR_TYPE_COMPOSITION_LAYER_QUAD;
+    pLayer->next = NULL;
+    pLayer->layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+    pLayer->space = space;
+    pLayer->eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+    pLayer->subImage.swapchain = hud_swapchain.handle;
+    pLayer->subImage.imageRect.offset.x = 0;
+    pLayer->subImage.imageRect.offset.y = 0;
+    pLayer->subImage.imageRect.extent.width = hud_swapchain.width;
+    pLayer->subImage.imageRect.extent.height = hud_swapchain.height;
+    pLayer->subImage.imageArrayIndex = 0;
+    pLayer->pose.orientation.x = 0.0f;
+    pLayer->pose.orientation.y = 0.0f;
+    pLayer->pose.orientation.z = 0.0f;
+    pLayer->pose.orientation.w = 1.0f;
+    pLayer->pose.position.x = 0.0f;
+    pLayer->pose.position.y = 0.0f;
+    pLayer->pose.position.z = -harness_game_config.vr_hud_distance;
+    pLayer->size.width = harness_game_config.vr_hud_width;
+    pLayer->size.height = harness_game_config.vr_hud_width * hud_swapchain.height / hud_swapchain.width;
+    return 1;
+}
+
 // Hands the eye images of the frame in progress to the runtime. They were rendered with the views
 // located in VR_BeginNextFrame, which are submitted unchanged with them.
 static void VR_EndCurrentFrame(void) {
     XrFrameEndInfo end_info = { .type = XR_TYPE_FRAME_END_INFO };
     XrCompositionLayerProjection layer = { .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION };
     XrCompositionLayerProjectionView layer_views[VR_EYE_COUNT];
-    const XrCompositionLayerBaseHeader* layers[1];
+    XrCompositionLayerQuad hud_layer;
+    const XrCompositionLayerBaseHeader* layers[2];
+    uint32_t layer_count = 0;
     int rendered = 0;
     int i;
 
@@ -499,6 +570,22 @@ static void VR_EndCurrentFrame(void) {
             rendered = VR_RenderEye(i, &layer_views[i]);
         }
     }
+    layer.space = space;
+    layer.viewCount = VR_EYE_COUNT;
+    layer.views = layer_views;
+    if (rendered) {
+        layers[layer_count++] = (const XrCompositionLayerBaseHeader*)&layer;
+    }
+    // Menus always; the HUD during the race only if wanted ([VR] Hud)
+    if (frame_state.shouldRender && (!rendered || harness_game_config.vr_hud) && VR_RenderHud(&hud_layer)) {
+        layers[layer_count++] = (const XrCompositionLayerBaseHeader*)&hud_layer;
+    }
+    end_info.displayTime = frame_state.predictedDisplayTime;
+    end_info.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
+    end_info.layerCount = layer_count;
+    end_info.layers = layers;
+    VR_Check(xrEndFrame(session, &end_info), "xrEndFrame");
+
     if (rendered && eye_targets[0].rendered) {
         if (VR_ShouldDump()) {
             dump_count++;
@@ -509,16 +596,6 @@ static void VR_EndCurrentFrame(void) {
     for (i = 0; i < VR_EYE_COUNT; i++) {
         eye_targets[i].rendered = 0;
     }
-
-    layer.space = space;
-    layer.viewCount = VR_EYE_COUNT;
-    layer.views = layer_views;
-    layers[0] = (const XrCompositionLayerBaseHeader*)&layer;
-    end_info.displayTime = frame_state.predictedDisplayTime;
-    end_info.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
-    end_info.layerCount = rendered ? 1 : 0;
-    end_info.layers = layers;
-    VR_Check(xrEndFrame(session, &end_info), "xrEndFrame");
 }
 
 // Waits for the next headset frame, begins it and locates the eyes for its predicted display time.
@@ -563,6 +640,10 @@ static void VR_Swap(br_pixelmap* back_buffer) {
     if (vr_state == eVR_state_not_started) {
         // First swap: the OpenGL context exists and glrend has loaded the GL functions
         vr_state = VR_Start() ? eVR_state_active : eVR_state_disabled;
+        if (vr_state == eVR_state_active) {
+            // In OpenGL mode glrend passes its screen pixelmap to the swap function
+            VR_StartHud(back_buffer);
+        }
     }
     // Order of the OpenXR frame loop across the game's frames: the images of frame N are submitted
     // here, then frame N+1 begins and the game renders it with the views located for it
@@ -571,6 +652,26 @@ static void VR_Swap(br_pixelmap* back_buffer) {
     }
     if (vr_state == eVR_state_active) {
         VR_BeginNextFrame();
+    }
+    // The next game frame draws its 2D overlay from scratch, like the monitor image
+    if (vr_state == eVR_state_active && hud_target != NULL) {
+        BrPixelmapFill(hud_target, 0);
+    }
+}
+
+int VR_GetHudTarget(br_pixelmap** pColour, br_pixelmap** pDepth) {
+    if (hud_target == NULL || hud_depth == NULL) {
+        return 0;
+    }
+    BrPixelmapFill(hud_depth, 0xFFFFFFFF);
+    *pColour = hud_target;
+    *pDepth = hud_depth;
+    return 1;
+}
+
+void VR_PauseHudCapture(int pPaused) {
+    if (hud_screen != NULL) {
+        BrGLRendSetOverlayCapture(hud_screen, pPaused ? NULL : hud_target);
     }
 }
 
@@ -709,6 +810,18 @@ void VR_Shutdown(void) {
     session_state = XR_SESSION_STATE_UNKNOWN;
     frame_begun = 0;
     views_valid = 0;
+    if (hud_swapchain.handle != XR_NULL_HANDLE) {
+        xrDestroySwapchain(hud_swapchain.handle);
+    }
+    free(hud_swapchain.images);
+    memset(&hud_swapchain, 0, sizeof(hud_swapchain));
+    if (hud_screen != NULL) {
+        BrGLRendSetOverlayCapture(hud_screen, NULL);
+    }
+    hud_screen = NULL;
+    hud_target = NULL;
+    hud_depth = NULL;
+    hud_texture = 0;
     // The render targets belong to the GL context, which may already be gone; only forget them
     memset(eye_targets, 0, sizeof(eye_targets));
 }

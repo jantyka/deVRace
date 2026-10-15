@@ -17,6 +17,14 @@ int VR_WantsEyeImages(void);
 // Returns 0 if no render target could be created.
 int VR_BeginEye(int pEye, br_pixelmap* pScreen, br_pixelmap** pColour, br_pixelmap** pDepth);
 
+// Stops (non-zero) or resumes copying the 2D overlay to the HUD quad, for 2D drawing that only
+// belongs to the monitor image (e.g. the background fill behind the 3D scene)
+void VR_PauseHudCapture(int pPaused);
+
+// The HUD quad's render target and its depth buffer, for 2D elements the game draws as 3D scenes
+// (pratcam, dimmed rectangles). The depth buffer is cleared on each call. Returns 0 without HUD.
+int VR_GetHudTarget(br_pixelmap** pColour, br_pixelmap** pDepth);
+
 // Call after the eye's scene has been rendered (BrZbSceneRenderEnd). With DEVRACE_VR_DEBUG=1 it
 // logs GL errors and sample pixels of the eye image.
 void VR_EndEye(int pEye);

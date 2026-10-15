@@ -314,6 +314,11 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.vsync = 1;
     // VR: hide bonnets borrowed from another car in the cockpit view
     harness_game_config.vr_hide_borrowed_bonnet = 1;
+    // VR: HUD during the race on
+    harness_game_config.vr_hud = 1;
+    // VR: HUD and menus on a quad 1.8 m ahead, 1.6 m wide
+    harness_game_config.vr_hud_distance = 1.8f;
+    harness_game_config.vr_hud_width = 1.6f;
 
     // install signal handler
     harness_game_config.install_signalhandler = 1;
@@ -536,6 +541,12 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
 
     else if (MATCH("VR", "HideBorrowedBonnet")) {
         harness_game_config.vr_hide_borrowed_bonnet = (value[0] == '1');
+    } else if (MATCH("VR", "Hud")) {
+        harness_game_config.vr_hud = (value[0] == '1');
+    } else if (MATCH("VR", "HudDistance")) {
+        harness_game_config.vr_hud_distance = atof(value);
+    } else if (MATCH("VR", "HudWidth")) {
+        harness_game_config.vr_hud_width = atof(value);
     }
 
     else if (MATCH("Cheats", "EditMode")) {
