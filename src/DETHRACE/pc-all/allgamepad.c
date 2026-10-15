@@ -6,7 +6,8 @@
 // (harness_game_config.gamepad_config, defaults in harness.c).
 //
 // In menus the d-pad and the left stick act as arrow keys, plus MenuConfirm (Enter) and MenuBack
-// (Escape). During the race the actions of [Gamepad] apply; HudAvatar switches the pratcam.
+// (Escape). During the race the actions below apply; the Hud... actions switch HUD elements of the
+// VR build ([VR] Hud...), HudAvatar switches the pratcam in other builds.
 // Rumble: light when running over a pedestrian, strong when crashing into another car.
 
 #include "constants.h"
@@ -102,6 +103,21 @@ static void GamepadPressKey(int* pKeys, int pMark, int pKey) {
     gGamepad_keys[gGamepad_key_count++] = pKey;
 }
 
+#ifdef DETHRACE_VR
+static int GamepadAnyHudElementOn(void) {
+    return harness_game_config.vr_hud_dimming || harness_game_config.vr_hud_damage || harness_game_config.vr_hud_pratcam
+        || harness_game_config.vr_hud_messages || harness_game_config.vr_hud_instruments || harness_game_config.vr_hud_powerups;
+}
+
+// Everything but the info field and the pratcam
+static void GamepadSetHudOther(int pOn) {
+    harness_game_config.vr_hud_dimming = pOn;
+    harness_game_config.vr_hud_damage = pOn;
+    harness_game_config.vr_hud_instruments = pOn;
+    harness_game_config.vr_hud_powerups = pOn;
+}
+#endif
+
 static void GamepadRaceKeys(int* pKeys, int pMark) {
     size_t i;
 
@@ -110,9 +126,32 @@ static void GamepadRaceKeys(int* pKeys, int pMark) {
             GamepadPressKey(pKeys, pMark, gKey_mapping[gGamepad_key_actions[i].function]);
         }
     }
+#ifdef DETHRACE_VR
+    // VR: HUD switches, see [VR] Hud... in dethrace.ini. They switch the single elements (and turn
+    // [VR] Hud on), so after "all off" each element can be switched on again on its own.
+    if (GamepadActionPressed(eGamepad_action_hud_all)) {
+        GamepadSetHudOther(!GamepadAnyHudElementOn() || !harness_game_config.vr_hud);
+        harness_game_config.vr_hud_messages = harness_game_config.vr_hud_damage;
+        harness_game_config.vr_hud_pratcam = harness_game_config.vr_hud_damage;
+        harness_game_config.vr_hud = 1;
+    }
+    if (GamepadActionPressed(eGamepad_action_hud_info)) {
+        harness_game_config.vr_hud_messages = !harness_game_config.vr_hud_messages;
+        harness_game_config.vr_hud = 1;
+    }
+    if (GamepadActionPressed(eGamepad_action_hud_avatar)) {
+        harness_game_config.vr_hud_pratcam = !harness_game_config.vr_hud_pratcam;
+        harness_game_config.vr_hud = 1;
+    }
+    if (GamepadActionPressed(eGamepad_action_hud_other)) {
+        GamepadSetHudOther(!harness_game_config.vr_hud_damage);
+        harness_game_config.vr_hud = 1;
+    }
+#else
     if (GamepadActionHeld(&gGamepad, eGamepad_action_hud_avatar)) {
         GamepadPressKey(pKeys, pMark, gKey_mapping[KEYMAP_PRATCAM]);
     }
+#endif
 }
 
 static void GamepadMenuKeys(int* pKeys, int pMark) {
