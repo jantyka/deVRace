@@ -73,10 +73,6 @@ void DepthEffect(br_pixelmap* pRender_buffer, br_pixelmap* pDepth_buffer, br_act
 
 void DepthEffectSky(br_pixelmap* pRender_buffer, br_pixelmap* pDepth_buffer, br_actor* pCamera, br_matrix34* pCamera_to_world);
 
-#ifdef DETHRACE_VR
-void VR_DepthEffectSky(br_actor* pCamera, br_matrix34* pCamera_to_world);
-#endif
-
 void DoWobbleCamera(br_actor* pCamera);
 
 void DoDrugWobbleCamera(br_actor* pCamera);
