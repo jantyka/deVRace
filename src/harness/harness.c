@@ -61,6 +61,7 @@ tHarness_platform gHarness_platform;
 
 static int Harness_ProcessCommandLine(int* argc, char* argv[]);
 static int Harness_ProcessIniFile(void);
+static void Harness_DefaultGamepadConfig(void);
 
 static int Harness_InitPlatform(void) {
     int required_caps = 0;
@@ -290,6 +291,9 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.no_bind = 0;
     // Disable verbose logging
     harness_game_config.verbose = 0;
+    // Use a connected gamepad, with the default layout
+    harness_game_config.gamepad = 1;
+    Harness_DefaultGamepadConfig();
 
     // install signal handler
     harness_game_config.install_signalhandler = 1;
@@ -459,6 +463,110 @@ int Harness_ProcessCommandLine(int* argc, char* argv[]) {
     return 0;
 }
 
+// Names used in [Gamepad] for the gamepad inputs, actions and axes
+static const char* gamepad_input_names[eGamepad_input_count] = {
+    "A", "B", "X", "Y", "Back", "Guide", "Start", "LeftStick", "RightStick", "LB", "RB",
+    "DpadUp", "DpadDown", "DpadLeft", "DpadRight",
+    "LeftStickLeft", "LeftStickRight", "LeftStickUp", "LeftStickDown",
+    "RightStickLeft", "RightStickRight", "RightStickUp", "RightStickDown",
+    "LT", "RT"
+};
+static const char* gamepad_action_names[eGamepad_action_count] = {
+    "Accelerate", "Handbrake", "GearDown", "Horn", "Recovery", "Repair", "Cockpit", "Map", "Menu",
+    "LookLeft", "LookForward", "LookRight", "HudAll", "HudInfo", "HudAvatar", "HudOther",
+    "MenuConfirm", "MenuBack"
+};
+static const char* gamepad_axis_names[] = { "None", "LeftStickX", "RightStickX", "LT", "RT" };
+
+static void Harness_SetGamepadBinding(tHarness_gamepad_action pAction, int pInput0, int pInput1) {
+    harness_game_config.gamepad_config.bindings[pAction][0] = pInput0;
+    harness_game_config.gamepad_config.bindings[pAction][1] = pInput1;
+}
+
+static void Harness_DefaultGamepadConfig(void) {
+    tHarness_gamepad_config* c = &harness_game_config.gamepad_config;
+
+    Harness_SetGamepadBinding(eGamepad_action_accelerate, eGamepad_button_a, -1);
+    Harness_SetGamepadBinding(eGamepad_action_handbrake, eGamepad_button_left_shoulder, -1);
+    Harness_SetGamepadBinding(eGamepad_action_gear_down, eGamepad_button_right_shoulder, -1);
+    Harness_SetGamepadBinding(eGamepad_action_horn, eGamepad_button_left_stick, -1);
+    Harness_SetGamepadBinding(eGamepad_action_recovery, eGamepad_button_y, -1);
+    Harness_SetGamepadBinding(eGamepad_action_repair, eGamepad_button_x, -1);
+    Harness_SetGamepadBinding(eGamepad_action_cockpit, eGamepad_button_back, -1);
+    Harness_SetGamepadBinding(eGamepad_action_map, eGamepad_button_b, -1);
+    Harness_SetGamepadBinding(eGamepad_action_menu, eGamepad_button_start, -1);
+    Harness_SetGamepadBinding(eGamepad_action_look_left, eGamepad_input_right_stick_left, -1);
+    Harness_SetGamepadBinding(eGamepad_action_look_forward, eGamepad_input_right_stick_up, -1);
+    Harness_SetGamepadBinding(eGamepad_action_look_right, eGamepad_input_right_stick_right, -1);
+    Harness_SetGamepadBinding(eGamepad_action_hud_all, eGamepad_button_dpad_down, -1);
+    Harness_SetGamepadBinding(eGamepad_action_hud_info, eGamepad_button_dpad_up, -1);
+    Harness_SetGamepadBinding(eGamepad_action_hud_avatar, eGamepad_button_dpad_left, -1);
+    Harness_SetGamepadBinding(eGamepad_action_hud_other, eGamepad_button_dpad_right, -1);
+    Harness_SetGamepadBinding(eGamepad_action_menu_confirm, eGamepad_button_a, -1);
+    Harness_SetGamepadBinding(eGamepad_action_menu_back, eGamepad_button_x, eGamepad_button_start);
+    c->steer = eGamepad_axis_left_x;
+    c->throttle = eGamepad_axis_right_trigger;
+    c->brake = eGamepad_axis_left_trigger;
+    c->deadzone = 0.2f;
+}
+
+static int Harness_GamepadInputFromName(const char* pName) {
+    int i;
+
+    for (i = 0; i < eGamepad_input_count; i++) {
+        if (strcasecmp(pName, gamepad_input_names[i]) == 0) {
+            return i;
+        }
+    }
+    if (strcasecmp(pName, "None") != 0) {
+        LOG_WARN2("Unknown gamepad input %s", pName);
+    }
+    return -1;
+}
+
+// [Gamepad] entries: actions (one or two inputs, comma separated), axes and settings
+static int Harness_ParseGamepadEntry(const char* pName, const char* pValue) {
+    tHarness_gamepad_config* c = &harness_game_config.gamepad_config;
+    char value[64];
+    char* second;
+    size_t i;
+
+    for (i = 0; i < eGamepad_action_count; i++) {
+        if (strcasecmp(pName, gamepad_action_names[i]) == 0) {
+            safe_strcpy(value, pValue);
+            second = strchr(value, ',');
+            if (second != NULL) {
+                *second++ = '\0';
+                while (*second == ' ') {
+                    second++;
+                }
+            }
+            c->bindings[i][0] = Harness_GamepadInputFromName(value);
+            c->bindings[i][1] = second != NULL ? Harness_GamepadInputFromName(second) : -1;
+            return 1;
+        }
+    }
+    if (strcasecmp(pName, "Steer") == 0 || strcasecmp(pName, "Throttle") == 0 || strcasecmp(pName, "Brake") == 0) {
+        tHarness_gamepad_axis* axis = strcasecmp(pName, "Steer") == 0 ? &c->steer : (strcasecmp(pName, "Throttle") == 0 ? &c->throttle : &c->brake);
+        for (i = 0; i < BR_ASIZE(gamepad_axis_names); i++) {
+            if (strcasecmp(pValue, gamepad_axis_names[i]) == 0) {
+                *axis = (tHarness_gamepad_axis)i;
+                return 1;
+            }
+        }
+        LOG_WARN2("Unknown gamepad axis %s", pValue);
+        return 1;
+    }
+    if (strcasecmp(pName, "Enabled") == 0) {
+        harness_game_config.gamepad = (pValue[0] == '1');
+    } else if (strcasecmp(pName, "Deadzone") == 0) {
+        c->deadzone = atof(pValue);
+    } else {
+        return 0;
+    }
+    return 1;
+}
+
 static int Harness_Ini_Callback(void* user, const char* section, const char* name, const char* value) {
     int i;
     float f;
@@ -494,6 +602,14 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         gGraf_spec_index = (value[0] == '1');
     } else if (MATCH("General", "PhysicsPerFrame")) {
         harness_game_config.physics_per_frame = (value[0] == '1');
+    } else if (MATCH("General", "Gamepad")) {
+        harness_game_config.gamepad = (value[0] == '1');
+    }
+
+    else if (strcmp(section, "Gamepad") == 0) {
+        if (!Harness_ParseGamepadEntry(name, value)) {
+            LOG_WARN2("Unknown [Gamepad] entry %s", name);
+        }
     }
 
     else if (MATCH("Cheats", "EditMode")) {

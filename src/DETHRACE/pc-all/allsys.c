@@ -259,6 +259,8 @@ void PDSetKeyArray(int* pKeys, int pMark) {
             pKeys[i] = 0;
         }
     }
+    // Added by dethrace: gamepad buttons act as keys
+    PDGamepadSetKeyArray(pKeys, pMark);
 }
 
 // FUNCTION: CARM95 0x004a7a49

@@ -195,6 +195,7 @@ target_sources(dethrace PRIVATE
     pd/sys.h
 
     pc-all/allsys.c
+    pc-all/allgamepad.c
 
     # original win95 sys and network
     # pc-win95/win95sys.c

@@ -7,6 +7,8 @@
 #include "sdl3_scancode_map.h"
 #include "sdl3_syms.h"
 
+#include <string.h>
+
 SDL_COMPILE_TIME_ASSERT(sdl3_platform_requires_SDL3, SDL_MAJOR_VERSION == 3);
 
 static SDL_Window* window;
@@ -126,6 +128,30 @@ static int is_only_key_modifier(SDL_Keymod modifier_flags, SDL_Keymod flag_check
     return (modifier_flags & flag_check) && (modifier_flags & (SDL_KMOD_CTRL | SDL_KMOD_SHIFT | SDL_KMOD_ALT | SDL_KMOD_GUI)) == (modifier_flags & flag_check);
 }
 
+// First connected gamepad, opened when SDL reports it (also for gamepads connected later)
+static SDL_Gamepad* gamepad;
+
+static void SDL3_Harness_GetGamepadState(tHarness_gamepad_state* state) {
+    int i;
+
+    memset(state, 0, sizeof(*state));
+    if (gamepad == NULL) {
+        return;
+    }
+    state->connected = 1;
+    for (i = 0; i < eGamepad_button_count; i++) {
+        if (SDL3_GetGamepadButton(gamepad, (SDL_GamepadButton)i)) {
+            state->buttons |= 1u << i;
+        }
+    }
+    state->left_x = SDL3_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX) / 32767.f;
+    state->left_y = SDL3_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY) / 32767.f;
+    state->right_x = SDL3_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.f;
+    state->right_y = SDL3_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.f;
+    state->left_trigger = SDL3_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) / 32767.f;
+    state->right_trigger = SDL3_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) / 32767.f;
+}
+
 static void SDL3_Harness_ProcessWindowMessages(void) {
     SDL_Event event;
 
@@ -166,6 +192,23 @@ static void SDL3_Harness_ProcessWindowMessages(void) {
 
         case SDL_EVENT_WINDOW_RESIZED:
             calculate_viewport(event.window.data1, event.window.data2);
+            break;
+
+        case SDL_EVENT_GAMEPAD_ADDED:
+            if (gamepad == NULL) {
+                gamepad = SDL3_OpenGamepad(event.gdevice.which);
+                if (gamepad != NULL) {
+                    LOG_INFO2("Gamepad connected: %s", SDL3_GetGamepadName(gamepad));
+                }
+            }
+            break;
+
+        case SDL_EVENT_GAMEPAD_REMOVED:
+            if (gamepad != NULL && SDL3_GetGamepadID(gamepad) == event.gdevice.which) {
+                SDL3_CloseGamepad(gamepad);
+                gamepad = NULL;
+                LOG_INFO2("%s", "Gamepad disconnected");
+            }
             break;
 
         case SDL_EVENT_QUIT:
@@ -258,6 +301,10 @@ static void SDL3_Harness_CreateWindow(const char* title, int width, int height, 
 
     if (!SDL3_Init(SDL_INIT_VIDEO)) {
         LOG_PANIC2("SDL_INIT_VIDEO error: %s", SDL3_GetError());
+    }
+    // Gamepads are optional; connected ones arrive as SDL_EVENT_GAMEPAD_ADDED
+    if (!SDL3_InitSubSystem(SDL_INIT_GAMEPAD)) {
+        LOG_WARN2("SDL_INIT_GAMEPAD error: %s", SDL3_GetError());
     }
 
     extra_window_flags = SDL_WINDOW_RESIZABLE;
@@ -419,6 +466,7 @@ static int SDL3_Harness_Platform_Init(tHarness_platform* platform) {
     platform->PaletteChanged = SDL3_Harness_PaletteChanged;
     platform->GL_GetProcAddress = SDL3_Harness_GL_GetProcAddress;
     platform->GetViewport = SDL3_Harness_GetViewport;
+    platform->GetGamepadState = SDL3_Harness_GetGamepadState;
     return 0;
 };
 

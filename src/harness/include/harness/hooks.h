@@ -9,6 +9,35 @@ typedef enum tHarness_window_type {
     eWindow_type_opengl = 1,
 } tHarness_window_type;
 
+// Gamepad buttons, in the order of SDL's gamepad buttons (Xbox names)
+typedef enum tHarness_gamepad_button {
+    eGamepad_button_a,
+    eGamepad_button_b,
+    eGamepad_button_x,
+    eGamepad_button_y,
+    eGamepad_button_back,
+    eGamepad_button_guide,
+    eGamepad_button_start,
+    eGamepad_button_left_stick,
+    eGamepad_button_right_stick,
+    eGamepad_button_left_shoulder,
+    eGamepad_button_right_shoulder,
+    eGamepad_button_dpad_up,
+    eGamepad_button_dpad_down,
+    eGamepad_button_dpad_left,
+    eGamepad_button_dpad_right,
+    eGamepad_button_count
+} tHarness_gamepad_button;
+
+// State of the first connected gamepad
+typedef struct tHarness_gamepad_state {
+    int connected;
+    br_uint_32 buttons; // bit (1 << tHarness_gamepad_button) set while held
+    float left_x, left_y; // -1 (left / up) .. 1 (right / down)
+    float right_x, right_y;
+    float left_trigger, right_trigger; // 0 .. 1
+} tHarness_gamepad_state;
+
 // Platform implementation functions
 typedef struct tHarness_platform {
     // Render a fullscreen quad using the specified pixel data
@@ -46,6 +75,8 @@ typedef struct tHarness_platform {
     // If this platform supports OpenGL
     void* (*GL_GetProcAddress)(const char* name);
     void (*GetViewport)(int* x, int* y, float* width_multiplier, float* height_multiplier);
+    // Optional: fills the state of the first connected gamepad (connected = 0 without one)
+    void (*GetGamepadState)(tHarness_gamepad_state* state);
 
 } tHarness_platform;
 

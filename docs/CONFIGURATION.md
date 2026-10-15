@@ -43,6 +43,9 @@ DemoTimeout = 240
 ; Which directory in the [Games] section to run
 DefaultGame = c1
 
+; Use a connected gamepad (layout in src/DETHRACE/pc-all/allgamepad.c, changeable in [Gamepad])
+Gamepad = 1
+
 ; Original physics updates every 40ms, causing noticable camera juddering when cornering at slow speed
 ; Enabling this runs physics every frame, smoothing movement out
 PhysicsPerFrame = 1

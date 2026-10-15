@@ -37,6 +37,65 @@ typedef struct tHarness_game_info {
     int data_dir_has_3dfx_assets;
 } tHarness_game_info;
 
+// Gamepad inputs that can be bound to actions: buttons (tHarness_gamepad_button order), stick
+// directions and the triggers pressed past half way
+typedef enum tHarness_gamepad_input {
+    eGamepad_input_none = -1,
+    eGamepad_input_left_stick_left = 15,
+    eGamepad_input_left_stick_right,
+    eGamepad_input_left_stick_up,
+    eGamepad_input_left_stick_down,
+    eGamepad_input_right_stick_left,
+    eGamepad_input_right_stick_right,
+    eGamepad_input_right_stick_up,
+    eGamepad_input_right_stick_down,
+    eGamepad_input_left_trigger,
+    eGamepad_input_right_trigger,
+    eGamepad_input_count
+} tHarness_gamepad_input;
+
+// Gamepad actions configurable in [Gamepad]
+typedef enum tHarness_gamepad_action {
+    eGamepad_action_accelerate,
+    eGamepad_action_handbrake,
+    eGamepad_action_gear_down,
+    eGamepad_action_horn,
+    eGamepad_action_recovery,
+    eGamepad_action_repair,
+    eGamepad_action_cockpit,
+    eGamepad_action_map,
+    eGamepad_action_menu,
+    eGamepad_action_look_left,
+    eGamepad_action_look_forward,
+    eGamepad_action_look_right,
+    eGamepad_action_hud_all,
+    eGamepad_action_hud_info,
+    eGamepad_action_hud_avatar,
+    eGamepad_action_hud_other,
+    eGamepad_action_menu_confirm,
+    eGamepad_action_menu_back,
+    eGamepad_action_count
+} tHarness_gamepad_action;
+
+// Gamepad axes for the analog car controls
+typedef enum tHarness_gamepad_axis {
+    eGamepad_axis_none,
+    eGamepad_axis_left_x,
+    eGamepad_axis_right_x,
+    eGamepad_axis_left_trigger,
+    eGamepad_axis_right_trigger
+} tHarness_gamepad_axis;
+
+#define HARNESS_GAMEPAD_BINDINGS 2
+
+typedef struct tHarness_gamepad_config {
+    int bindings[eGamepad_action_count][HARNESS_GAMEPAD_BINDINGS]; // tHarness_gamepad_input
+    tHarness_gamepad_axis steer;
+    tHarness_gamepad_axis throttle;
+    tHarness_gamepad_axis brake;
+    float deadzone;
+} tHarness_gamepad_config;
+
 typedef struct tHarness_game_dir {
     char name[256];
     char directory[MAX_PATH];
@@ -59,6 +118,9 @@ typedef struct tHarness_game_config {
     int game_completed;
 
     int install_signalhandler;
+    // use a connected gamepad, and its layout ([Gamepad])
+    int gamepad;
+    tHarness_gamepad_config gamepad_config;
     int no_bind;
     char network_adapter_name[256];
     char platform_name[256];
