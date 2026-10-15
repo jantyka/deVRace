@@ -1893,6 +1893,23 @@ int ConditionallyFillWithSky(br_pixelmap* pPixelmap) {
 // IDA: void __usercall RenderAFrame(int pDepth_mask_on@<EAX>)
 // FUNCTION: CARM95 0x004b59ce
 #ifdef DETHRACE_VR
+// VR: the cockpit shake shears the camera (gSheer_mat) to move the image like the 2D dashboard. In
+// stereo a shear distorts the view, so the eye cameras get the equivalent rotation instead: the
+// sheared forward axis is kept and the other axes are made orthonormal to it again. The position,
+// including the shake's sideways move, stays as it is. Without a shear the matrix is unchanged.
+static void VR_RemoveCameraShear(br_matrix34* pMatrix) {
+    br_vector3* x = (br_vector3*)pMatrix->m[0];
+    br_vector3* y = (br_vector3*)pMatrix->m[1];
+    br_vector3* z = (br_vector3*)pMatrix->m[2];
+    br_vector3 projection;
+
+    BrVector3Normalise(z, z);
+    BrVector3Scale(&projection, z, BrVector3Dot(y, z));
+    BrVector3Sub(y, y, &projection);
+    BrVector3Normalise(y, y);
+    BrVector3Cross(x, y, z);
+}
+
 // VR: renders the 3D pass of RenderAFrame once more per eye into the headset's render targets. For
 // each eye the globals the pass relies on (camera matrix and camera to world transform, render and
 // depth buffer) point to the eye while it is rendered and are restored afterwards, so helpers that
@@ -1900,7 +1917,8 @@ int ConditionallyFillWithSky(br_pixelmap* pPixelmap) {
 // this frame with the head pose and eye offset from the headset on top; the game camera itself is
 // unchanged. Keep in sync with the 3D block in RenderAFrame.
 // Differences to the regular pass: the eye's asymmetric frustum, a field of view for culling that
-// covers it, the sky as a cylinder fixed to the world (VR_DepthEffectSky), and a time of 0 for smoke, sparks and proximity rays so their animation advances once per frame.
+// covers it, the sky as a cylinder fixed to the world (VR_DepthEffectSky), no camera shear, and a
+// time of 0 for smoke, sparks and proximity rays so their animation advances once per frame.
 static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
     br_pixelmap* colour;
     br_pixelmap* depth;
@@ -1928,6 +1946,7 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
     BrMatrix34Copy(&saved_camera_matrix, &gCamera->t.t.mat);
     BrMatrix34Copy(&saved_camera_to_world, &gCamera_to_world);
     BrMatrix34Copy(&camera_matrix, &gCamera->t.t.mat);
+    VR_RemoveCameraShear(&camera_matrix);
 
     for (eye = 0; eye < VR_EYE_COUNT; eye++) {
         if (!VR_BeginEye(eye, gScreen, &colour, &depth)) {
