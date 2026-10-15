@@ -295,6 +295,7 @@ static int VR_Start(void) {
     if (dump_dir != NULL) {
         LOG_INFO("Writing eye images to %s every %d frames", dump_dir, dump_interval);
     }
+    VR_Gfx_DisableVsync();
     return 1;
 }
 
