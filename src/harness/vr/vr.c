@@ -1,8 +1,9 @@
 // OpenXR layer of deVRace: instance, session, reference space, one swapchain per eye and the frame
 // loop. The graphics binding (how the OpenGL context is handed to the runtime) lives in vr_gfx_*.c.
 //
-// Current state: every eye is cleared to a test colour (left red, right blue). The game itself is
-// still only shown on the monitor.
+// The game renders its 3D pass once per eye into a render target (see harness/vr.h); on the next
+// swap the images are copied into the headset's swapchains. Eyes without an image this frame (menus,
+// loading) are shown black. No head tracking yet: both eyes use the game camera.
 //
 // Debugging: DEVRACE_VR_DUMP_FRAMES=<existing directory> writes both eye images as PPM files every
 // DEVRACE_VR_DUMP_INTERVAL frames (default 90), at most VR_DUMP_MAX_FRAMES times.
@@ -11,18 +12,20 @@
 #include "vr_gfx.h"
 
 #include "include/harness/trace.h"
+#include "include/harness/vr.h"
 
+#include "brglrend.h"
 #include <glad/glad.h>
 
 #define XR_USE_GRAPHICS_API_OPENGL
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define VR_EYE_COUNT 2
 #define VR_DUMP_MAX_FRAMES 20
 
 typedef enum tVR_state {
@@ -39,6 +42,14 @@ typedef struct tVR_eye_swapchain {
     XrSwapchainImageOpenGLKHR* images;
 } tVR_eye_swapchain;
 
+// The game's render target for an eye, same size as the swapchain
+typedef struct tVR_eye_target {
+    br_pixelmap* colour;
+    br_pixelmap* depth;
+    GLuint texture;
+    int rendered;
+} tVR_eye_target;
+
 static void (*original_swap)(br_pixelmap* back_buffer);
 static tVR_state vr_state = eVR_state_not_started;
 
@@ -52,7 +63,10 @@ static int session_running;
 static XrViewConfigurationView view_configs[VR_EYE_COUNT];
 static XrView views[VR_EYE_COUNT];
 static tVR_eye_swapchain eye_swapchains[VR_EYE_COUNT];
+static tVR_eye_target eye_targets[VR_EYE_COUNT];
+static int views_located;
 static GLuint eye_framebuffer;
+static GLuint eye_read_framebuffer;
 
 static const char* dump_dir;
 static int dump_interval;
@@ -268,6 +282,7 @@ static int VR_CreateSwapchains(void) {
         }
     }
     glGenFramebuffers(1, &eye_framebuffer);
+    glGenFramebuffers(1, &eye_read_framebuffer);
     LOG_INFO("Swapchains: %dx%d per eye, format 0x%llx, %u images", eye_swapchains[0].width, eye_swapchains[0].height,
         (unsigned long long)create_info.format, eye_swapchains[0].image_count);
     return 1;
@@ -377,8 +392,8 @@ static void VR_DumpEye(int pEye, int pWidth, int pHeight) {
 }
 
 static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view) {
-    static const GLfloat test_colours[VR_EYE_COUNT][4] = { { 0.8f, 0.1f, 0.1f, 1.0f }, { 0.1f, 0.2f, 0.8f, 1.0f } };
     tVR_eye_swapchain* eye = &eye_swapchains[pEye];
+    tVR_eye_target* target = &eye_targets[pEye];
     XrSwapchainImageAcquireInfo acquire_info = { .type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
     XrSwapchainImageWaitInfo wait_info = { .type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
     XrSwapchainImageReleaseInfo release_info = { .type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
@@ -406,19 +421,27 @@ static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view)
     glGetBooleanv(GL_COLOR_WRITEMASK, old_colour_mask);
     old_scissor = glIsEnabled(GL_SCISSOR_TEST);
 
-    glBindFramebuffer(GL_FRAMEBUFFER, eye_framebuffer);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, eye->images[image_index].image, 0);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, eye_framebuffer);
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, eye->images[image_index].image, 0);
     glViewport(0, 0, eye->width, eye->height);
     glDisable(GL_SCISSOR_TEST);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glClearColor(test_colours[pEye][0], test_colours[pEye][1], test_colours[pEye][2], test_colours[pEye][3]);
-    glClear(GL_COLOR_BUFFER_BIT);
+    if (target->rendered && target->texture != 0) {
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, eye_read_framebuffer);
+        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, target->texture, 0);
+        glBlitFramebuffer(0, 0, eye->width, eye->height, 0, 0, eye->width, eye->height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+    } else {
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+    }
 
     if (dump_dir != NULL && dump_count < VR_DUMP_MAX_FRAMES && frame_index % dump_interval == 0) {
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, eye_framebuffer);
         VR_DumpEye(pEye, eye->width, eye->height);
     }
 
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, old_draw_framebuffer);
     glBindFramebuffer(GL_READ_FRAMEBUFFER, old_read_framebuffer);
     glViewport(old_viewport[0], old_viewport[1], old_viewport[2], old_viewport[3]);
@@ -477,6 +500,7 @@ static void VR_Frame(void) {
         locate_info.space = space;
         if (VR_Check(xrLocateViews(session, &locate_info, &view_state, VR_EYE_COUNT, &view_count, views), "xrLocateViews")
             && (view_state.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT)) {
+            views_located = 1;
             rendered = 1;
             for (i = 0; i < VR_EYE_COUNT && rendered; i++) {
                 rendered = VR_RenderEye(i, &layer_views[i]);
@@ -487,6 +511,9 @@ static void VR_Frame(void) {
         dump_count++;
     }
     frame_index++;
+    for (i = 0; i < VR_EYE_COUNT; i++) {
+        eye_targets[i].rendered = 0;
+    }
 
     layer.space = space;
     layer.viewCount = VR_EYE_COUNT;
@@ -509,6 +536,60 @@ static void VR_Swap(br_pixelmap* back_buffer) {
     if (vr_state == eVR_state_active) {
         VR_Frame();
     }
+}
+
+int VR_WantsEyeImages(void) {
+    return vr_state == eVR_state_active && session_running && views_located;
+}
+
+int VR_BeginEye(int pEye, br_pixelmap* pScreen, br_pixelmap** pColour, br_pixelmap** pDepth) {
+    tVR_eye_target* target = &eye_targets[pEye];
+    tVR_eye_swapchain* eye = &eye_swapchains[pEye];
+
+    if (target->colour == NULL) {
+        target->colour = BrPixelmapMatchTypedSized(pScreen, BR_PMMATCH_HIDDEN, BR_PMT_RGBX_888, eye->width, eye->height);
+        if (target->colour == NULL) {
+            LOG_WARN("Cannot create a %dx%d render target for eye %d", eye->width, eye->height, pEye);
+            return 0;
+        }
+        target->colour->origin_x = target->colour->width / 2;
+        target->colour->origin_y = target->colour->height / 2;
+        target->depth = BrPixelmapMatch(target->colour, BR_PMMATCH_DEPTH_16);
+        if (target->depth == NULL || BrPixelmapQuery(target->colour, &target->texture, BRT_OPENGL_TEXTURE_U32) != BRE_OK) {
+            LOG_WARN("Cannot create the depth buffer or texture for eye %d", pEye);
+            return 0;
+        }
+        LOG_INFO("Render target for eye %d: %dx%d, texture %u", pEye, target->colour->width, target->colour->height, target->texture);
+    }
+    if (target->depth == NULL || target->texture == 0) {
+        return 0;
+    }
+    *pColour = target->colour;
+    *pDepth = target->depth;
+    target->rendered = 1;
+    return 1;
+}
+
+void VR_GetEyeViewToScreen(int pEye, br_scalar pHither, br_scalar pYon, br_matrix4* pMatrix) {
+    const XrFovf* fov = &views[pEye].fov;
+    float left = tanf(fov->angleLeft);
+    float right = tanf(fov->angleRight);
+    float up = tanf(fov->angleUp);
+    float down = tanf(fov->angleDown);
+    // View space looks down -Z, as in CameraToScreenMatrix4
+    float hither = -pHither;
+    float yon = -pYon;
+
+    // Same layout as BRender's Matrix4PerspectiveNew (row vectors, BRender depth range), but with
+    // the centre of projection moved to match the asymmetric field of view of the eye
+    memset(pMatrix, 0, sizeof(*pMatrix));
+    pMatrix->m[0][0] = 2.0f / (right - left);
+    pMatrix->m[1][1] = 2.0f / (up - down);
+    pMatrix->m[2][0] = (right + left) / (right - left);
+    pMatrix->m[2][1] = (up + down) / (up - down);
+    pMatrix->m[2][2] = (yon + hither) / (yon - hither);
+    pMatrix->m[2][3] = -1.0f;
+    pMatrix->m[3][2] = -2.0f * yon * hither / (yon - hither);
 }
 
 void VR_Install(tHarness_platform* pPlatform) {
@@ -543,4 +624,7 @@ void VR_Shutdown(void) {
     }
     session_running = 0;
     session_state = XR_SESSION_STATE_UNKNOWN;
+    views_located = 0;
+    // The render targets belong to the GL context, which may already be gone; only forget them
+    memset(eye_targets, 0, sizeof(eye_targets));
 }

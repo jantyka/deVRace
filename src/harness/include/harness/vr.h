@@ -1,0 +1,24 @@
+#ifndef HARNESS_VR_PUBLIC_H
+#define HARNESS_VR_PUBLIC_H
+
+#include "brender.h"
+
+// Interface between the game's renderer and the OpenXR layer (DETHRACE_VR builds only).
+// The game renders its 3D pass once more per eye into the render target of that eye; the OpenXR
+// layer copies the images into the headset's swapchains on the next swap.
+
+#define VR_EYE_COUNT 2
+
+// Non-zero when the headset wants eye images for the current frame
+int VR_WantsEyeImages(void);
+
+// Render target of an eye, created from the screen pixelmap on first use. Call right before
+// rendering the eye: the image is only handed to the headset if this was called during the frame.
+// Returns 0 if no render target could be created.
+int VR_BeginEye(int pEye, br_pixelmap* pScreen, br_pixelmap** pColour, br_pixelmap** pDepth);
+
+// Projection of an eye in BRender's convention, for BrDbSetViewToScreenOverride. The asymmetric
+// field of view comes from the runtime; hither and yon are the camera's (positive distances).
+void VR_GetEyeViewToScreen(int pEye, br_scalar pHither, br_scalar pYon, br_matrix4* pMatrix);
+
+#endif
