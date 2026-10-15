@@ -16,6 +16,9 @@
 #include "harness/hooks.h"
 #include "harness/os.h"
 #include "harness/trace.h"
+#ifdef DETHRACE_VR
+#include "harness/vr.h"
+#endif
 #include "init.h"
 #include "input.h"
 #include "loading.h"
@@ -1889,6 +1892,52 @@ int ConditionallyFillWithSky(br_pixelmap* pPixelmap) {
 
 // IDA: void __usercall RenderAFrame(int pDepth_mask_on@<EAX>)
 // FUNCTION: CARM95 0x004b59ce
+#ifdef DETHRACE_VR
+// VR: renders the 3D pass of RenderAFrame once more per eye into the headset's render targets, with
+// the eye's projection. Keep in sync with the 3D block in RenderAFrame. Smoke, sparks and proximity
+// rays get a time of 0, so their animation only advances once per frame in the regular pass.
+// Not yet in the eye images: car shadows (rendered by RenderShadows into gRender_screen).
+static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
+    br_pixelmap* colour;
+    br_pixelmap* depth;
+    br_matrix4 view_to_screen;
+    br_camera* camera_data;
+    int eye;
+
+    if (!VR_WantsEyeImages()) {
+        return;
+    }
+    camera_data = gCamera->type_data;
+    for (eye = 0; eye < VR_EYE_COUNT; eye++) {
+        if (!VR_BeginEye(eye, gScreen, &colour, &depth)) {
+            return;
+        }
+        BrPixelmapFill(colour, 0);
+        BrPixelmapFill(depth, 0xFFFFFFFF);
+        VR_GetEyeViewToScreen(eye, camera_data->hither_z, camera_data->yon_z, &view_to_screen);
+        BrDbSetViewToScreenOverride(&view_to_screen);
+
+        BrZbSceneRenderBegin(gUniverse_actor, gCamera, colour, depth);
+        ProcessNonTrackActors(colour, depth, gCamera, &gCamera_to_world, pOld_camera_matrix);
+        ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 0);
+        RenderLollipops();
+        DepthEffectSky(colour, depth, gCamera, &gCamera_to_world);
+        DepthEffect(colour, depth, gCamera, &gCamera_to_world);
+        if (!gAusterity_mode) {
+            ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 1);
+        }
+        RenderSplashes();
+        RenderSmoke(colour, depth, gCamera, &gCamera_to_world, 0);
+        RenderSparks(colour, depth, gCamera, &gCamera_to_world, 0);
+        RenderProximityRays(colour, depth, gCamera, &gCamera_to_world, 0);
+        BrZbSceneRenderEnd();
+
+        BrDbSetViewToScreenOverride(NULL);
+        VR_EndEye(eye);
+    }
+}
+#endif
+
 void RenderAFrame(int pDepth_mask_on) {
     int cat;
     int i;
@@ -2080,6 +2129,10 @@ void RenderAFrame(int pDepth_mask_on) {
         RenderProximityRays(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, gFrame_period);
         BrZbSceneRenderEnd();
     }
+#ifdef DETHRACE_VR
+    // VR: same scene once per eye, before the camera matrix is restored below
+    VR_RenderEyePasses(&old_camera_matrix);
+#endif
 #ifdef DETHRACE_3DFX_PATCH
     PDLockRealBackScreen(1);
 #endif
