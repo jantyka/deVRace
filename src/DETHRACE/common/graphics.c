@@ -1910,6 +1910,29 @@ static void VR_RemoveCameraShear(br_matrix34* pMatrix) {
     BrVector3Cross(x, y, z);
 }
 
+// VR: background colour of the eye images, as ConditionallyFillWithSky picks it for the regular pass
+// on tracks without a sky texture (or inside special volumes with their own sky colour): the fog
+// colour, the volume's sky colour or black. With a sky texture the sky covers the background anyway.
+static br_uint_32 VR_SkyFillColour(void) {
+    int bgnd_col;
+
+    if (gProgram_state.current_depth_effect.sky_texture != NULL && (gLast_camera_special_volume == NULL || gLast_camera_special_volume->sky_col < 0)) {
+        return 0;
+    }
+    if (gProgram_state.current_depth_effect.type == eDepth_effect_fog || gSwap_depth_effect_type == eDepth_effect_fog) {
+        bgnd_col = 255;
+    } else if (gProgram_state.current_depth_effect.type && gSwap_depth_effect_type) {
+        if (gLast_camera_special_volume && gLast_camera_special_volume->sky_col >= 0) {
+            bgnd_col = gLast_camera_special_volume->sky_col;
+        } else {
+            bgnd_col = 0;
+        }
+    } else {
+        bgnd_col = 0;
+    }
+    return ((br_colour*)gRender_palette->pixels)[bgnd_col];
+}
+
 // VR: renders the 3D pass of RenderAFrame once more per eye into the headset's render targets. For
 // each eye the globals the pass relies on (camera matrix and camera to world transform, render and
 // depth buffer) point to the eye while it is rendered and are restored afterwards, so helpers that
@@ -1952,7 +1975,7 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
         if (!VR_BeginEye(eye, gScreen, &colour, &depth)) {
             break;
         }
-        BrPixelmapFill(colour, 0);
+        BrPixelmapFill(colour, VR_SkyFillColour());
         BrPixelmapFill(depth, 0xFFFFFFFF);
 
         VR_GetEyeFrustum(eye, &left, &right, &top, &bottom);
