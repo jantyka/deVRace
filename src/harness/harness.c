@@ -508,6 +508,9 @@ static void Harness_DefaultGamepadConfig(void) {
     c->throttle = eGamepad_axis_right_trigger;
     c->brake = eGamepad_axis_left_trigger;
     c->deadzone = 0.2f;
+    c->rumble = 1;
+    c->rumble_pedestrian = 0.35f;
+    c->rumble_car = 1.0f;
 }
 
 static int Harness_GamepadInputFromName(const char* pName) {
@@ -561,6 +564,12 @@ static int Harness_ParseGamepadEntry(const char* pName, const char* pValue) {
         harness_game_config.gamepad = (pValue[0] == '1');
     } else if (strcasecmp(pName, "Deadzone") == 0) {
         c->deadzone = atof(pValue);
+    } else if (strcasecmp(pName, "Rumble") == 0) {
+        c->rumble = (pValue[0] == '1');
+    } else if (strcasecmp(pName, "RumblePedestrian") == 0) {
+        c->rumble_pedestrian = atof(pValue);
+    } else if (strcasecmp(pName, "RumbleCar") == 0) {
+        c->rumble_car = atof(pValue);
     } else {
         return 0;
     }

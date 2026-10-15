@@ -77,6 +77,8 @@ typedef struct tHarness_platform {
     void (*GetViewport)(int* x, int* y, float* width_multiplier, float* height_multiplier);
     // Optional: fills the state of the first connected gamepad (connected = 0 without one)
     void (*GetGamepadState)(tHarness_gamepad_state* state);
+    // Optional: rumbles the gamepad, low and high frequency motor 0..1, for a duration in ms
+    void (*RumbleGamepad)(float low, float high, br_uint_32 duration_ms);
 
 } tHarness_platform;
 

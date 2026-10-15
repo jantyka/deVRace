@@ -2047,6 +2047,8 @@ void CheckPedestrianDeathScenario(tPedestrian_data* pPedestrian) {
                             pPedestrian->respawn_time = GetRaceTime() + IRandomBetween(0, gRespawn_variance) + gMin_respawn_time;
                         }
                         if (the_car->driver == eDriver_local_human && !gRace_finished && pPedestrian->ref_number < 100) {
+                            // Added by dethrace: light gamepad rumble when running over a pedestrian
+                            PDGamepadRumble(eGamepad_rumble_pedestrian, 1.f);
                             PipeSinglePedIncident(pPedestrian - gPedestrian_array, incident_actor);
                             AwardTime(gPed_time_value[gProgram_state.skill_level]);
                             if (the_time - gLast_ped_splat_time <= 1000) {

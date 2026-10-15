@@ -7,6 +7,7 @@
 //
 // In menus the d-pad and the left stick act as arrow keys, plus MenuConfirm (Enter) and MenuBack
 // (Escape). During the race the actions of [Gamepad] apply; HudAvatar switches the pratcam.
+// Rumble: light when running over a pedestrian, strong when crashing into another car.
 
 #include "constants.h"
 #include "globvars.h"
@@ -222,5 +223,22 @@ void PDGamepadSetCarControls(tJoystick* pJoystick, tCar_controls* pKeys) {
     brake = GamepadAxis(config->brake);
     if (!pKeys->dec && brake > GAMEPAD_TRIGGER_THRESHOLD) {
         pJoystick->dec = (tS32)(brake * 65536.f);
+    }
+}
+
+// Rumble for collisions, scaled by [Gamepad] RumblePedestrian / RumbleCar
+void PDGamepadRumble(tGamepad_rumble pKind, float pStrength) {
+    const tHarness_gamepad_config* config = &harness_game_config.gamepad_config;
+    float scale;
+
+    if (!harness_game_config.gamepad || !config->rumble || !gGamepad.connected || gHarness_platform.RumbleGamepad == NULL) {
+        return;
+    }
+    if (pKind == eGamepad_rumble_pedestrian) {
+        scale = config->rumble_pedestrian;
+        gHarness_platform.RumbleGamepad(0.4f * scale, scale, 120);
+    } else {
+        scale = config->rumble_car * MIN(1.f, pStrength);
+        gHarness_platform.RumbleGamepad(scale, 0.7f * scale, 300);
     }
 }
