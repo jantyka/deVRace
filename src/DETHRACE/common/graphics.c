@@ -1893,58 +1893,74 @@ int ConditionallyFillWithSky(br_pixelmap* pPixelmap) {
 // IDA: void __usercall RenderAFrame(int pDepth_mask_on@<EAX>)
 // FUNCTION: CARM95 0x004b59ce
 #ifdef DETHRACE_VR
-// VR: renders the 3D pass of RenderAFrame once more per eye into the headset's render targets, with
-// the eye's projection and the eye's camera: the game camera as it is this frame (unchanged, only
-// moved temporarily) with the head pose and eye offset from the headset on top. Keep in sync with
-// the 3D block in RenderAFrame. Smoke, sparks and proximity rays get a time of 0, so their
-// animation only advances once per frame in the regular pass.
-// Not yet in the eye images: car shadows (rendered by RenderShadows into gRender_screen).
+// VR: renders the 3D pass of RenderAFrame once more per eye into the headset's render targets. For
+// each eye the globals the pass relies on (camera matrix and camera to world transform, render and
+// depth buffer) point to the eye while it is rendered and are restored afterwards, so helpers that
+// read them directly (smoke, sparks, shadows) match the eye. The eye's camera is the game camera of
+// this frame with the head pose and eye offset from the headset on top; the game camera itself is
+// unchanged. Keep in sync with the 3D block in RenderAFrame.
+// Differences to the regular pass: the eye's asymmetric frustum and a time of 0 for smoke, sparks and proximity rays so their animation advances once per frame.
 static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
     br_pixelmap* colour;
     br_pixelmap* depth;
-    br_scalar left, right, top, bottom;
+    br_pixelmap* saved_render_screen;
+    br_pixelmap* saved_depth_buffer;
+    br_matrix34 saved_camera_matrix;
+    br_matrix34 saved_camera_to_world;
     br_matrix34 camera_matrix;
     br_matrix34 eye_to_camera;
-    br_matrix34 eye_camera_to_world;
-    br_camera* camera_data;
+    br_scalar left, right, top, bottom;
     int eye;
 
     if (!VR_WantsEyeImages()) {
         return;
     }
-    camera_data = gCamera->type_data;
+    saved_render_screen = gRender_screen;
+    saved_depth_buffer = gDepth_buffer;
+    BrMatrix34Copy(&saved_camera_matrix, &gCamera->t.t.mat);
+    BrMatrix34Copy(&saved_camera_to_world, &gCamera_to_world);
     BrMatrix34Copy(&camera_matrix, &gCamera->t.t.mat);
+
     for (eye = 0; eye < VR_EYE_COUNT; eye++) {
         if (!VR_BeginEye(eye, gScreen, &colour, &depth)) {
             break;
         }
         BrPixelmapFill(colour, 0);
         BrPixelmapFill(depth, 0xFFFFFFFF);
+
         VR_GetEyeFrustum(eye, &left, &right, &top, &bottom);
         BrDbSetFrustumOverride(left, right, top, bottom);
+
         VR_GetEyeToCamera(eye, WORLD_SCALE, &eye_to_camera);
         BrMatrix34Mul(&gCamera->t.t.mat, &eye_to_camera, &camera_matrix);
-        BrMatrix34Mul(&eye_camera_to_world, &eye_to_camera, &gCamera_to_world);
+        BrActorToActorMatrix34(&gCamera_to_world, gCamera, gUniverse_actor);
+        gRender_screen = colour;
+        gDepth_buffer = depth;
 
-        BrZbSceneRenderBegin(gUniverse_actor, gCamera, colour, depth);
-        ProcessNonTrackActors(colour, depth, gCamera, &eye_camera_to_world, pOld_camera_matrix);
-        ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &eye_camera_to_world, 0);
+        RenderShadows(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world);
+        BrZbSceneRenderBegin(gUniverse_actor, gCamera, gRender_screen, gDepth_buffer);
+        ProcessNonTrackActors(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, pOld_camera_matrix);
+        ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 0);
         RenderLollipops();
-        DepthEffectSky(colour, depth, gCamera, &eye_camera_to_world);
-        DepthEffect(colour, depth, gCamera, &eye_camera_to_world);
+        DepthEffectSky(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world);
+        DepthEffect(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world);
         if (!gAusterity_mode) {
-            ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &eye_camera_to_world, 1);
+            ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 1);
         }
         RenderSplashes();
-        RenderSmoke(colour, depth, gCamera, &eye_camera_to_world, 0);
-        RenderSparks(colour, depth, gCamera, &eye_camera_to_world, 0);
-        RenderProximityRays(colour, depth, gCamera, &eye_camera_to_world, 0);
+        RenderSmoke(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, 0);
+        RenderSparks(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, 0);
+        RenderProximityRays(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, 0);
         BrZbSceneRenderEnd();
 
         BrDbClearFrustumOverride();
         VR_EndEye(eye);
     }
-    BrMatrix34Copy(&gCamera->t.t.mat, &camera_matrix);
+
+    gRender_screen = saved_render_screen;
+    gDepth_buffer = saved_depth_buffer;
+    BrMatrix34Copy(&gCamera->t.t.mat, &saved_camera_matrix);
+    BrMatrix34Copy(&gCamera_to_world, &saved_camera_to_world);
 }
 #endif
 
