@@ -63,6 +63,14 @@ if(DETHRACE_VR)
     find_package(OpenXR CONFIG REQUIRED)
     find_package(OpenGL REQUIRED COMPONENTS EGL)
     target_compile_definitions(harness PRIVATE DETHRACE_VR)
+    target_sources(harness PRIVATE
+        vr/vr.c
+        vr/vr.h
+        vr/vr_gfx.h
+        vr/vr_gfx_egl.c
+    )
+    # glad: the GL functions are loaded by glrend, the VR layer uses the same function pointers
+    target_link_libraries(harness PRIVATE OpenXR::openxr_loader OpenGL::EGL BRender::Drivers::GLRend)
 endif()
 
 if(DETHRACE_SOUND_ENABLED)

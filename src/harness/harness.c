@@ -7,6 +7,9 @@
 #include "include/harness/os.h"
 #include "ini.h"
 #include "version.h"
+#ifdef DETHRACE_VR
+#include "vr/vr.h"
+#endif
 
 #include <ctype.h>
 #include <errno.h>
@@ -121,6 +124,10 @@ static int Harness_InitPlatform(void) {
         }
     }
     LOG_INFO3("Platform: %s (%s)", selected_bootstrap->name, selected_bootstrap->description);
+
+#ifdef DETHRACE_VR
+    VR_Install(&gHarness_platform);
+#endif
 
     if (harness_game_config.frame_stats_interval > 0) {
         FrameStats_Install(&gHarness_platform, harness_game_config.frame_stats_interval);
@@ -340,6 +347,9 @@ int Harness_Init(int* argc, char* argv[]) {
 }
 
 void Harness_Quit(void) {
+#ifdef DETHRACE_VR
+    VR_Shutdown();
+#endif
 
     if (harness_game_config.install_signalhandler) {
         OS_RemoveSignalHandler();
