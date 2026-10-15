@@ -13,6 +13,7 @@
     X(GetGamepadName, const char*, (SDL_Gamepad*))                                                      \
     X(GetGamepadButton, bool, (SDL_Gamepad*, SDL_GamepadButton))                                        \
     X(GetGamepadAxis, Sint16, (SDL_Gamepad*, SDL_GamepadAxis))                                          \
+    X(RumbleGamepad, bool, (SDL_Gamepad*, Uint16, Uint16, Uint32))                                      \
     X(Quit, void, (void))                                                                               \
     X(Delay, void, (Uint32))                                                                            \
     X(GetTicks, Uint64, (void))                                                                         \

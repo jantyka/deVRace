@@ -68,6 +68,12 @@ void PDSetKeyArray(int* pKeys, int pMark);
 // Added by dethrace: gamepad support (pc-all/allgamepad.c)
 void PDGamepadSetKeyArray(int* pKeys, int pMark);
 void PDGamepadSetCarControls(tJoystick* pJoystick, tCar_controls* pKeys);
+typedef enum tGamepad_rumble {
+    eGamepad_rumble_pedestrian,
+    eGamepad_rumble_car
+} tGamepad_rumble;
+// pStrength 0..1, used for car crashes
+void PDGamepadRumble(tGamepad_rumble pKind, float pStrength);
 
 int PDGetASCIIFromKey(int pKey);
 

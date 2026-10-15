@@ -152,6 +152,12 @@ static void SDL3_Harness_GetGamepadState(tHarness_gamepad_state* state) {
     state->right_trigger = SDL3_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) / 32767.f;
 }
 
+static void SDL3_Harness_RumbleGamepad(float low, float high, br_uint_32 duration_ms) {
+    if (gamepad != NULL) {
+        SDL3_RumbleGamepad(gamepad, (Uint16)(low * 65535.f), (Uint16)(high * 65535.f), duration_ms);
+    }
+}
+
 static void SDL3_Harness_ProcessWindowMessages(void) {
     SDL_Event event;
 
@@ -470,6 +476,7 @@ static int SDL3_Harness_Platform_Init(tHarness_platform* platform) {
     platform->GL_GetProcAddress = SDL3_Harness_GL_GetProcAddress;
     platform->GetViewport = SDL3_Harness_GetViewport;
     platform->GetGamepadState = SDL3_Harness_GetGamepadState;
+    platform->RumbleGamepad = SDL3_Harness_RumbleGamepad;
     return 0;
 };
 

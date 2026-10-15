@@ -853,6 +853,10 @@ void DamageSystems(tCar_spec* pCar, br_vector3* pImpact_point, br_vector3* pEner
             }
         }
         if (pCar->driver == eDriver_local_human) {
+            if (pWas_hitting_a_car) {
+                // Added by dethrace: strong gamepad rumble when crashing into another car
+                PDGamepadRumble(eGamepad_rumble_car, 0.6f + energy_magnitude * 0.4f);
+            }
             switch (impact_location) {
             case eImpact_left:
                 NewScreenWobble(

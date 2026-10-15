@@ -94,6 +94,9 @@ typedef struct tHarness_gamepad_config {
     tHarness_gamepad_axis throttle;
     tHarness_gamepad_axis brake;
     float deadzone;
+    int rumble;
+    float rumble_pedestrian;
+    float rumble_car;
 } tHarness_gamepad_config;
 
 typedef struct tHarness_game_dir {
