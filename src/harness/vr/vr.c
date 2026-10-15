@@ -635,6 +635,30 @@ void VR_EndEye(int pEye) {
     LOG_INFO2("%s", text);
 }
 
+void VR_GetEyeToCamera(int pEye, br_scalar pMetres_per_unit, br_matrix34* pMatrix) {
+    const XrQuaternionf* q = &views[pEye].pose.orientation;
+    const XrVector3f* p = &views[pEye].pose.position;
+
+    // Rotation matrix of the quaternion, transposed because BRender multiplies row vectors
+    pMatrix->m[0][0] = 1.0f - 2.0f * (q->y * q->y + q->z * q->z);
+    pMatrix->m[0][1] = 2.0f * (q->x * q->y + q->z * q->w);
+    pMatrix->m[0][2] = 2.0f * (q->x * q->z - q->y * q->w);
+    pMatrix->m[1][0] = 2.0f * (q->x * q->y - q->z * q->w);
+    pMatrix->m[1][1] = 1.0f - 2.0f * (q->x * q->x + q->z * q->z);
+    pMatrix->m[1][2] = 2.0f * (q->y * q->z + q->x * q->w);
+    pMatrix->m[2][0] = 2.0f * (q->x * q->z + q->y * q->w);
+    pMatrix->m[2][1] = 2.0f * (q->y * q->z - q->x * q->w);
+    pMatrix->m[2][2] = 1.0f - 2.0f * (q->x * q->x + q->y * q->y);
+    pMatrix->m[3][0] = p->x / pMetres_per_unit;
+    pMatrix->m[3][1] = p->y / pMetres_per_unit;
+    pMatrix->m[3][2] = p->z / pMetres_per_unit;
+
+    if (debug_enabled && rendered_frame_index % 300 == 0) {
+        LOG_INFO("eye %d frame %lu: position %.3f %.3f %.3f m, orientation %.3f %.3f %.3f %.3f", pEye, rendered_frame_index,
+            p->x, p->y, p->z, q->x, q->y, q->z, q->w);
+    }
+}
+
 void VR_GetEyeViewToScreen(int pEye, br_scalar pHither, br_scalar pYon, br_matrix4* pMatrix) {
     const XrFovf* fov = &views[pEye].fov;
     float left = tanf(fov->angleLeft);

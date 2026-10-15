@@ -21,6 +21,12 @@ int VR_BeginEye(int pEye, br_pixelmap* pScreen, br_pixelmap** pColour, br_pixelm
 // logs GL errors and sample pixels of the eye image.
 void VR_EndEye(int pEye);
 
+// Pose of an eye relative to the head's position when the session started (OpenXR LOCAL space), as a
+// BRender matrix (row vectors) with the position converted to game units. Multiplied in front of the
+// game camera's matrix it gives the eye's camera: head rotation, head movement and eye distance on
+// top of the game camera, which itself stays unchanged.
+void VR_GetEyeToCamera(int pEye, br_scalar pMetres_per_unit, br_matrix34* pMatrix);
+
 // Projection of an eye in BRender's convention, for BrDbSetViewToScreenOverride. The asymmetric
 // field of view comes from the runtime; hither and yon are the camera's (positive distances).
 void VR_GetEyeViewToScreen(int pEye, br_scalar pHither, br_scalar pYon, br_matrix4* pMatrix);
