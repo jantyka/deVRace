@@ -709,6 +709,116 @@ void DepthEffect(br_pixelmap* pRender_buffer, br_pixelmap* pDepth_buffer, br_act
     }
 }
 
+#ifdef DETHRACE_VR
+// VR: the original sky is a strip as wide as the camera's view that is turned with the camera's yaw
+// (MungeSkyModel, DoHorizon). In a headset it would follow the head. For the eye images the same
+// bands and texture are laid out as a closed cylinder around the viewer, with the texture fixed to
+// the world: the horizon stays put when looking around, and there is sky behind and above as well.
+#define VR_SKY_SEGMENTS 24
+#define VR_SKY_ROWS 22
+
+static br_model* gVR_sky_model;
+static br_actor* gVR_sky_actor;
+static br_scalar gVR_sky_yon;
+static br_angle gVR_sky_fov;
+
+static void VR_BuildSkyModel(void) {
+    int row;
+    int segment;
+    int face;
+    int vertex;
+    br_vertex* band_vertex;
+    br_scalar angle;
+    br_scalar distance;
+    br_scalar radius;
+    br_scalar height;
+    br_scalar yaw;
+    br_scalar sky_width;
+
+    if (gVR_sky_model == NULL) {
+        gVR_sky_model = BrModelAllocate(NULL, VR_SKY_ROWS * (VR_SKY_SEGMENTS + 1), 2 * (VR_SKY_ROWS - 1) * VR_SKY_SEGMENTS);
+        gVR_sky_model->flags |= BR_MODF_KEEP_ORIGINAL;
+        face = 0;
+        for (row = 0; row < VR_SKY_ROWS - 1; row++) {
+            for (segment = 0; segment < VR_SKY_SEGMENTS; segment++) {
+                // Increasing segments go to the left as seen from inside, wound like the original
+                vertex = row * (VR_SKY_SEGMENTS + 1) + segment;
+                gVR_sky_model->faces[face].vertices[0] = vertex + 1;
+                gVR_sky_model->faces[face].vertices[1] = vertex;
+                gVR_sky_model->faces[face].vertices[2] = vertex + VR_SKY_SEGMENTS + 1;
+                gVR_sky_model->faces[face + 1].vertices[0] = vertex + 1;
+                gVR_sky_model->faces[face + 1].vertices[1] = vertex + VR_SKY_SEGMENTS + 1;
+                gVR_sky_model->faces[face + 1].vertices[2] = vertex + VR_SKY_SEGMENTS + 2;
+                gVR_sky_model->faces[face].smoothing = 1;
+                gVR_sky_model->faces[face + 1].smoothing = 1;
+                face += 2;
+            }
+        }
+        BrModelAdd(gVR_sky_model);
+        gVR_sky_actor = BrActorAllocate(BR_ACTOR_MODEL, NULL);
+        gVR_sky_actor->model = gVR_sky_model;
+        gVR_sky_actor->material = gHorizon_material;
+        gVR_sky_actor->render_style = BR_RSTYLE_NONE;
+        BrActorAdd(gUniverse_actor, gVR_sky_actor);
+    }
+
+    // One texture width covers gSky_image_width of the horizon, as in EdgeU
+    sky_width = BrAngleToRadian(gSky_image_width);
+    for (row = 0; row < VR_SKY_ROWS; row++) {
+        // Heights, distances and v coordinates of the forward sky's bands (set by MungeSkyModel),
+        // with the outermost bands limited to straight up and down
+        band_vertex = &gForward_sky_model->vertices[4 * row];
+        distance = sqrt(band_vertex->p.v[1] * band_vertex->p.v[1] + band_vertex->p.v[2] * band_vertex->p.v[2]);
+        angle = atan2(band_vertex->p.v[1], -band_vertex->p.v[2]);
+        if (angle > M_PI / 2) {
+            angle = M_PI / 2;
+        } else if (angle < -M_PI / 2) {
+            angle = -M_PI / 2;
+        }
+        radius = cos(angle) * distance;
+        height = sin(angle) * distance;
+        for (segment = 0; segment <= VR_SKY_SEGMENTS; segment++) {
+            // yaw as in DoHorizon: angle of the direction's backward vector around Y
+            yaw = 2.f * M_PI * segment / VR_SKY_SEGMENTS;
+            vertex = row * (VR_SKY_SEGMENTS + 1) + segment;
+            gVR_sky_model->vertices[vertex].p.v[0] = -sin(yaw) * radius;
+            gVR_sky_model->vertices[vertex].p.v[1] = height;
+            gVR_sky_model->vertices[vertex].p.v[2] = -cos(yaw) * radius;
+            gVR_sky_model->vertices[vertex].map.v[0] = -yaw / sky_width;
+            gVR_sky_model->vertices[vertex].map.v[1] = band_vertex->map.v[1];
+        }
+    }
+    BrModelUpdate(gVR_sky_model, BR_MODU_ALL);
+    gVR_sky_yon = gOld_yon;
+    gVR_sky_fov = gOld_fov;
+}
+
+// VR: replaces DepthEffectSky in the eye passes. Draws the sky cylinder around the eye's camera.
+void VR_DepthEffectSky(br_actor* pCamera, br_matrix34* pCamera_to_world) {
+    if (gProgram_state.current_depth_effect.sky_texture == NULL
+        || (gLast_camera_special_volume != NULL && gLast_camera_special_volume->sky_col >= 0)) {
+        return;
+    }
+    // The bands come from the forward sky, which DoHorizon rebuilds when the camera's field of
+    // view or yon changes
+    if (gVR_sky_model == NULL || gVR_sky_yon != gOld_yon || gVR_sky_fov != gOld_fov) {
+        VR_BuildSkyModel();
+    }
+    BrMatrix34Identity(&gVR_sky_actor->t.t.mat);
+    BrVector3Copy(&gVR_sky_actor->t.t.translate.t, (br_vector3*)pCamera_to_world->m[3]);
+    gHorizon_material->map_transform.m[0][0] = 1.f;
+    gHorizon_material->map_transform.m[0][1] = 0.f;
+    gHorizon_material->map_transform.m[1][0] = 0.f;
+    gHorizon_material->map_transform.m[1][1] = 1.f;
+    gHorizon_material->map_transform.m[2][0] = 0.f;
+    gHorizon_material->map_transform.m[2][1] = 0.f;
+    BrMaterialUpdate(gHorizon_material, BR_MATU_ALL);
+    gVR_sky_actor->render_style = BR_RSTYLE_FACES;
+    BrZbSceneRenderAdd(gVR_sky_actor);
+    gVR_sky_actor->render_style = BR_RSTYLE_NONE;
+}
+#endif
+
 // IDA: void __usercall DepthEffectSky(br_pixelmap *pRender_buffer@<EAX>, br_pixelmap *pDepth_buffer@<EDX>, br_actor *pCamera@<EBX>, br_matrix34 *pCamera_to_world@<ECX>)
 // FUNCTION: CARM95 0x00462609
 void DepthEffectSky(br_pixelmap* pRender_buffer, br_pixelmap* pDepth_buffer, br_actor* pCamera, br_matrix34* pCamera_to_world) {
