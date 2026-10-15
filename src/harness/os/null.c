@@ -62,3 +62,7 @@ int OS_SetSocketNonBlocking(int socket) {
 int OS_CloseSocket(int socket) {
     return 1;
 }
+
+double OS_GetMonotonicTime(void) {
+    return 0.0;
+}

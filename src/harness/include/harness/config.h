@@ -59,6 +59,8 @@ typedef struct tHarness_game_config {
     int game_completed;
 
     int install_signalhandler;
+    // interval in seconds for frame timing statistics, 0 = disabled
+    int frame_stats_interval;
     int no_bind;
     char network_adapter_name[256];
     char platform_name[256];

@@ -1,6 +1,7 @@
 #include "harness.h"
 #include "../DETHRACE/constants.h"
 #include "ascii_tables.h"
+#include "frame_stats.h"
 #include "include/harness/config.h"
 #include "include/harness/hooks.h"
 #include "include/harness/os.h"
@@ -112,6 +113,10 @@ static int Harness_InitPlatform(void) {
         }
     }
     LOG_INFO3("Platform: %s (%s)", selected_bootstrap->name, selected_bootstrap->description);
+
+    if (harness_game_config.frame_stats_interval > 0) {
+        FrameStats_Install(&gHarness_platform, harness_game_config.frame_stats_interval);
+    }
 
     return 0;
 }
@@ -438,6 +443,13 @@ int Harness_ProcessCommandLine(int* argc, char* argv[]) {
                 safe_strcpy(harness_game_config.network_adapter_name, argv[i + 1]);
                 consumed = 2;
             }
+        } else if (strcasecmp(argv[i], "--frame-stats") == 0) {
+            harness_game_config.frame_stats_interval = 5;
+            consumed = 1;
+        } else if (strstr(argv[i], "--frame-stats=") != NULL) {
+            char* s = strstr(argv[i], "=");
+            harness_game_config.frame_stats_interval = atoi(s + 1);
+            consumed = 1;
         } else if (strcasecmp(argv[i], "--platform") == 0) {
             if (i < *argc + 1) {
                 safe_strcpy(harness_game_config.platform_name, argv[i + 1]);
@@ -528,6 +540,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.physics_per_frame = i < PHYSICS_STEP_TIME;
     } else if (MATCH("Developers", "InstallSignalHandler")) {
         harness_game_config.install_signalhandler = (value[0] == '1');
+    } else if (MATCH("Developers", "FrameStats")) {
+        harness_game_config.frame_stats_interval = atoi(value);
     }
 
     else {

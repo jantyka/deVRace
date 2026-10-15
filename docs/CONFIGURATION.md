@@ -64,6 +64,10 @@ VolumeMultiplier = 1
 
 [Network]
 AdapterName = ""
+
+[Developers]
+; Log frame timing statistics every N seconds (0 = disabled). Same as `--frame-stats=N`
+FrameStats = 0
 ```
 
 ## Order of precedence for game directory detection:

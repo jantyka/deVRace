@@ -48,6 +48,8 @@ target_sources(harness PRIVATE
 
     ascii_tables.h
     harness_trace.c
+    frame_stats.c
+    frame_stats.h
     harness.c
     harness.h
 

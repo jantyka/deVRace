@@ -55,4 +55,7 @@ int OS_SetSocketNonBlocking(int socket);
 
 int OS_CloseSocket(int socket);
 
+// Seconds from a monotonic clock with an unspecified starting point. Only differences are meaningful
+double OS_GetMonotonicTime(void);
+
 #endif

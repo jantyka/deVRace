@@ -506,3 +506,14 @@ int OS_SetSocketNonBlocking(int socket) {
 int OS_CloseSocket(int socket) {
     return closesocket(socket);
 }
+
+double OS_GetMonotonicTime(void) {
+    static LARGE_INTEGER frequency;
+    LARGE_INTEGER counter;
+
+    if (frequency.QuadPart == 0) {
+        QueryPerformanceFrequency(&frequency);
+    }
+    QueryPerformanceCounter(&counter);
+    return (double)counter.QuadPart / (double)frequency.QuadPart;
+}
