@@ -1940,8 +1940,8 @@ static br_uint_32 VR_SkyFillColour(void) {
 // this frame with the head pose and eye offset from the headset on top; the game camera itself is
 // unchanged. Keep in sync with the 3D block in RenderAFrame.
 // Differences to the regular pass: the eye's asymmetric frustum, a field of view for culling that
-// covers it, no camera shear, and a time of 0 for smoke, sparks and proximity rays so their
-// animation advances once per frame.
+// covers it, the sky as a cylinder fixed to the world (VR_DepthEffectSky), no camera shear, and a
+// time of 0 for smoke, sparks and proximity rays so their animation advances once per frame.
 static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
     br_pixelmap* colour;
     br_pixelmap* depth;
@@ -1998,7 +1998,7 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
         ProcessNonTrackActors(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, pOld_camera_matrix);
         ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 0);
         RenderLollipops();
-        DepthEffectSky(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world);
+        VR_DepthEffectSky(gCamera, &gCamera_to_world);
         DepthEffect(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world);
         if (!gAusterity_mode) {
             ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 1);
