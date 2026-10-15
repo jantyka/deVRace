@@ -1902,7 +1902,7 @@ int ConditionallyFillWithSky(br_pixelmap* pPixelmap) {
 static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
     br_pixelmap* colour;
     br_pixelmap* depth;
-    br_matrix4 view_to_screen;
+    br_scalar left, right, top, bottom;
     br_matrix34 camera_matrix;
     br_matrix34 eye_to_camera;
     br_matrix34 eye_camera_to_world;
@@ -1920,8 +1920,8 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
         }
         BrPixelmapFill(colour, 0);
         BrPixelmapFill(depth, 0xFFFFFFFF);
-        VR_GetEyeViewToScreen(eye, camera_data->hither_z, camera_data->yon_z, &view_to_screen);
-        BrDbSetViewToScreenOverride(&view_to_screen);
+        VR_GetEyeFrustum(eye, &left, &right, &top, &bottom);
+        BrDbSetFrustumOverride(left, right, top, bottom);
         VR_GetEyeToCamera(eye, WORLD_SCALE, &eye_to_camera);
         BrMatrix34Mul(&gCamera->t.t.mat, &eye_to_camera, &camera_matrix);
         BrMatrix34Mul(&eye_camera_to_world, &eye_to_camera, &gCamera_to_world);
@@ -1941,7 +1941,7 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
         RenderProximityRays(colour, depth, gCamera, &eye_camera_to_world, 0);
         BrZbSceneRenderEnd();
 
-        BrDbSetViewToScreenOverride(NULL);
+        BrDbClearFrustumOverride();
         VR_EndEye(eye);
     }
     BrMatrix34Copy(&gCamera->t.t.mat, &camera_matrix);

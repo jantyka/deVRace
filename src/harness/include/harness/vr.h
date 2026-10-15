@@ -27,8 +27,8 @@ void VR_EndEye(int pEye);
 // top of the game camera, which itself stays unchanged.
 void VR_GetEyeToCamera(int pEye, br_scalar pMetres_per_unit, br_matrix34* pMatrix);
 
-// Projection of an eye in BRender's convention, for BrDbSetViewToScreenOverride. The asymmetric
-// field of view comes from the runtime; hither and yon are the camera's (positive distances).
-void VR_GetEyeViewToScreen(int pEye, br_scalar pHither, br_scalar pYon, br_matrix4* pMatrix);
+// Asymmetric field of view of an eye as tangents of the angles to its left, right, top and bottom
+// edge (left and bottom negative), for BrDbSetFrustumOverride
+void VR_GetEyeFrustum(int pEye, br_scalar* pLeft, br_scalar* pRight, br_scalar* pTop, br_scalar* pBottom);
 
 #endif

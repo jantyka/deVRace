@@ -659,31 +659,16 @@ void VR_GetEyeToCamera(int pEye, br_scalar pMetres_per_unit, br_matrix34* pMatri
     }
 }
 
-void VR_GetEyeViewToScreen(int pEye, br_scalar pHither, br_scalar pYon, br_matrix4* pMatrix) {
+void VR_GetEyeFrustum(int pEye, br_scalar* pLeft, br_scalar* pRight, br_scalar* pTop, br_scalar* pBottom) {
     const XrFovf* fov = &views[pEye].fov;
-    float left = tanf(fov->angleLeft);
-    float right = tanf(fov->angleRight);
-    float up = tanf(fov->angleUp);
-    float down = tanf(fov->angleDown);
-    // View space looks down -Z, as in CameraToScreenMatrix4
-    float hither = -pHither;
-    float yon = -pYon;
 
-    // Same layout as BRender's Matrix4PerspectiveNew (row vectors, BRender depth range), but with
-    // the centre of projection moved to match the asymmetric field of view of the eye
-    memset(pMatrix, 0, sizeof(*pMatrix));
-    pMatrix->m[0][0] = 2.0f / (right - left);
-    pMatrix->m[1][1] = 2.0f / (up - down);
-    pMatrix->m[2][0] = (right + left) / (right - left);
-    pMatrix->m[2][1] = (up + down) / (up - down);
-    pMatrix->m[2][2] = (yon + hither) / (yon - hither);
-    pMatrix->m[2][3] = -1.0f;
-    pMatrix->m[3][2] = -2.0f * yon * hither / (yon - hither);
+    *pLeft = tanf(fov->angleLeft);
+    *pRight = tanf(fov->angleRight);
+    *pTop = tanf(fov->angleUp);
+    *pBottom = tanf(fov->angleDown);
 
     if (debug_enabled && rendered_frame_index == 0) {
-        LOG_INFO("eye %d: fov l %.3f r %.3f u %.3f d %.3f, hither %.4f yon %.1f, m00 %.3f m11 %.3f m20 %.3f m21 %.3f m22 %.4f m32 %.4f",
-            pEye, fov->angleLeft, fov->angleRight, fov->angleUp, fov->angleDown, (double)pHither, (double)pYon,
-            pMatrix->m[0][0], pMatrix->m[1][1], pMatrix->m[2][0], pMatrix->m[2][1], pMatrix->m[2][2], pMatrix->m[3][2]);
+        LOG_INFO("eye %d: fov tangents left %.3f right %.3f top %.3f bottom %.3f", pEye, *pLeft, *pRight, *pTop, *pBottom);
     }
 }
 
