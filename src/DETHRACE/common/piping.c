@@ -531,8 +531,11 @@ void AddDataToSession(int pSubject_index, void* pData, tU32 pData_length) {
         temp_buffer_size = pData_length + (gLocal_buffer_size + offsetof(tPipe_chunk, chunk_data));
         if (temp_buffer_size < LOCAL_BUFFER_SIZE && ((tPipe_session*)gLocal_buffer)->number_of_chunks != 0xFF) {
 #ifdef DETHRACE_FIX_BUGS
+            // Once per race: with many pedestrians this happens every frame
+            static tU32 warned_race_start;
             int amount = ((tPipe_session*)gLocal_buffer)->number_of_chunks;
-            if (255 - amount < 3) {
+            if (255 - amount < 3 && warned_race_start != gRace_start) {
+                warned_race_start = gRace_start;
                 LOG_WARN("Piping session has only %d remaining chunks, type=%s (%d)", 255 - amount, get_pipe_chunk_type_name(((tPipe_session*)gLocal_buffer)->chunk_type), ((tPipe_session*)gLocal_buffer)->chunk_type);
             }
 #endif
