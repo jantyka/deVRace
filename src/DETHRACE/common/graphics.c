@@ -3384,6 +3384,12 @@ int DoMouseCursor(void) {
         } else {
             period = 1000;
         }
+#ifdef DETHRACE_VR
+        // VR: no wait for 20 ms per menu frame (47 fps), the headset sets the pace of the menus too
+        if (VR_WantsEyeImages() && period > 0) {
+            break;
+        }
+#endif
 #ifdef DETHRACE_FIX_BUGS
         // avoid 100% CPU usage
         if (period <= 20) {
