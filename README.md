@@ -23,7 +23,7 @@ The original Dethrace README is in [docs/README.dethrace.md](docs/README.dethrac
 - **Blood on the lens** when you run over pedestrians at speed: drips run down the lens in the chase views (smaller and fewer in the far one); in the cockpit the airstream pushes it up the windscreen and to the outside of a turn. Moving the mouse too fast in the menus splatters some too.
 - **Rear view mirror** in the cockpit view, as a rectangle right below the race timer (`Mirror`).
 - **Graphics options at their best** on each start (`MaxDetail`).
-- **VR options** in the game's options screen (VR button): switch the blood on the lens on and off; saved to `dethrace.ini`.
+- **VR options** in the game's options screen (VR button): switch the blood on the lens and the options from the slop pack (below) on and off; saved to `dethrace.ini`.
 - **Cockpit view without the 2D dashboard** and without the driver's hands, showing the car's 3D bonnet. Cars whose data borrows another car's bonnet (most opponents use the Eagle's) show none instead of the wrong one.
 - **Smoke, sparks, shadows, culling and cockpit shake** are rendered per eye; the action replay is recorded only once.
 - **Native Wayland** client through SDL3 and EGL, using `XR_MNDX_egl_enable`. No X11/GLX.
@@ -53,6 +53,17 @@ Default layout (Xbox names), changeable in `[Gamepad]`:
 | D-pad up | VR: info field at the top (time, laps, credits, messages) on/off | Navigate |
 | D-pad left | VR: driver avatar (pratcam) on/off | Navigate |
 | D-pad right | VR: all other HUD elements on/off | Navigate |
+
+### From the dethrace-slop-pack
+
+Taken from [dethrace-slop-pack](https://github.com/TRPB/dethrace-slop-pack) by Tom Butler (the commits keep him as their author). All are off by default and can be switched in the VR options or in `[Slop]`:
+
+- **Vastly extended draw distance** covering geometry, opponents, pedestrians and powerups (`ExtendDrawDistance`)
+- **Opponent car level of detail always max**, with 10 times the view distance (`OpponentMaxDetail`)
+- **Wheel model rounding**: the octagonal wheels are regenerated with 40 sides as the cars load; the one-sided concave wheels of Hawk II and Roadhog are fixed too (`RoundWheels`)
+- **Pedestrian spasm fix**: no more pedestrians flipping between two poses every frame (`FixPedSpasm`)
+
+The slop pack's other features (widescreen, MSAA and sample rate shading, meld, achievements and more) are not part of deVRace.
 
 ### Other additions
 
@@ -146,6 +157,12 @@ Mirror = 1         ; rear view mirror in the cockpit view, below the race timer
 MaxDetail = 1      ; set every graphics option to its best on each start
 FarChase = 1.8     ; far chase camera: distance as a multiple of the normal one (0 = no far chase camera)
 
+[Slop]
+ExtendDrawDistance = 0 ; vastly extended draw distance (yon 1000, pedestrians 20 times as far)
+OpponentMaxDetail = 0  ; opponent cars always at full detail, 10 times the view distance
+RoundWheels = 0        ; round wheel models (from the next race on)
+FixPedSpasm = 0        ; pedestrian spasm fix
+
 [Gamepad]
 Enabled = 1
 ; actions: one or two inputs, comma separated. Inputs:
@@ -200,6 +217,7 @@ Environment variables for debugging: `DEVRACE_VR_DEBUG=1` (per-eye diagnostics),
 ## Credits
 
 - [Dethrace](https://github.com/dethrace-labs/dethrace) by dethrace-labs and contributors, which this is built on, and everyone credited in its [README](docs/README.dethrace.md)
+- [dethrace-slop-pack](https://github.com/TRPB/dethrace-slop-pack) by Tom Butler for the extended draw distance, full detail opponents, round wheels and the pedestrian spasm fix
 - [BRender](https://github.com/dethrace-labs/BRender-v1.3.2) by Argonaut Software, as maintained for Dethrace
 - Stainless Software and SCi for Carmageddon
 - [OpenXR](https://www.khronos.org/openxr/) by the Khronos Group, the [OpenXR SDK](https://github.com/KhronosGroup/OpenXR-SDK-Source) and its validation layers

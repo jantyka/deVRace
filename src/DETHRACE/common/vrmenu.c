@@ -5,16 +5,20 @@
 // rim, bright red while it is selected, and a metal grey body. The colours are taken from the
 // original buttons and matched to the palette of the screen. Behind it, the VR options screen uses
 // the options screen's frame with a dark panel of its own over the buttons, and a DONE button drawn
-// over the frame's CANCEL button. Changed options are saved to dethrace.ini.
+// over the frame's CANCEL button. Each option is a row switched on and off by confirming it; the
+// change is saved to dethrace.ini.
 
 #include "vrmenu.h"
 
 #include "brender.h"
+#include "brucetrk.h"
+#include "depth.h"
 #include "displays.h"
 #include "globvars.h"
 #include "grafdata.h"
 #include "graphics.h"
 #include "harness/config.h"
+#include "harness/trace.h"
 #include "intrface.h"
 #include "sound.h"
 #include "utility.h"
@@ -22,13 +26,31 @@
 
 // Rectangles in the options screen's coordinates: { low resolution, high resolution }
 static const tRectile gVR_button_rect = { { 12, 25 }, { 125, 300 }, { 52, 105 }, { 143, 344 } };
-static const tRectile gVR_panel_rect = { { 50, 100 }, { 37, 88 }, { 280, 560 }, { 142, 340 } };
-static const tRectile gVR_row_rect = { { 58, 116 }, { 67, 160 }, { 272, 544 }, { 82, 196 } };
+static const tRectile gVR_panel_rect = { { 50, 100 }, { 33, 80 }, { 280, 560 }, { 150, 360 } };
 static const tRectile gVR_done_rect = { { 57, 114 }, { 154, 370 }, { 123, 246 }, { 175, 420 } };
+// Rows of the VR options: the first one, the others below it at this distance
+static const tRectile gVR_row_rect = { { 58, 116 }, { 52, 124 }, { 272, 544 }, { 67, 160 } };
+static const int gVR_row_step[2] = { 17, 42 };
 
-// VR options screen: choice 0 is DONE (also escape), 1 the first option
-#define VRMENU_CHOICE_DONE 0
-#define VRMENU_CHOICE_BLOOD 1
+// The VR options: label, value, its entry in dethrace.ini and what changes at once when it is
+// switched (NULL: from the next race on, or nothing beyond the value)
+static void VRMenu_ApplyDrawDistance(void);
+static const struct {
+    char* label;
+    int* value;
+    const char* section;
+    const char* name;
+    void (*apply)(void);
+} gVR_options[] = {
+    { "CAMERA BLOOD EFFECT", &harness_game_config.vr_blood, "VR", "Blood", NULL },
+    { "VASTLY EXTENDED DRAW DISTANCE", &harness_game_config.extend_draw_distance, "Slop", "ExtendDrawDistance", VRMenu_ApplyDrawDistance },
+    { "OPPONENT CAR LEVEL OF DETAIL ALWAYS MAX", &harness_game_config.opponent_max_detail, "Slop", "OpponentMaxDetail", NULL },
+    { "WHEEL MODEL ROUNDING", &harness_game_config.round_wheels, "Slop", "RoundWheels", NULL },
+    { "PEDESTRIAN SPASM FIX", &harness_game_config.fix_ped_spasm, "Slop", "FixPedSpasm", NULL },
+};
+
+// VR options screen: the options are choices 0 to n-1, DONE (also escape) comes last
+#define VRMENU_CHOICE_DONE ((int)BR_ASIZE(gVR_options))
 
 static tInterface_spec gVR_options_spec;
 static tMouse_area gVR_options_mouse_areas[5];
@@ -234,14 +256,26 @@ static void VRMenu_Frame(int pLeft, int pTop, int pWidth, int pHeight, int pThic
     VRMenu_FillRect(pLeft + pWidth - pThickness, pTop, pThickness, pHeight, pColour);
 }
 
+static void VRMenu_RowRect(int pIndex, tRectile* pRect) {
+    int i;
+
+    for (i = 0; i < 2; i++) {
+        pRect->left[i] = gVR_row_rect.left[i];
+        pRect->right[i] = gVR_row_rect.right[i];
+        pRect->top[i] = gVR_row_rect.top[i] + pIndex * gVR_row_step[i];
+        pRect->bottom[i] = gVR_row_rect.bottom[i] + pIndex * gVR_row_step[i];
+    }
+}
+
 static void VRMenu_DrawVROptions(int pCurrent_choice, int pCurrent_mode) {
     const tRectile* panel = &gVR_panel_rect;
-    const tRectile* row = &gVR_row_rect;
+    tRectile row;
     tDR_font* title_font = &gFonts[gGraf_data_index ? kFont_LITPLAQ1 : kFont_LITPLAQ];
     tDR_font* font = &gFonts[gGraf_data_index ? kFont_BUTTOUT1 : kFont_BUTTOUT];
+    tDR_font* label_font;
     int unit = gGraf_data_index ? 2 : 1;
-    int selected = pCurrent_choice == VRMENU_CHOICE_BLOOD;
-    char* value = harness_game_config.vr_blood ? "ON" : "OFF";
+    char* value;
+    int i;
 
     VRMenu_FillRect(RECT_LEFT(panel), RECT_TOP(panel), RECT_WIDTH(panel), RECT_HEIGHT(panel), VRMenu_Colour(VR_COLOUR_PANEL));
     VRMenu_Frame(RECT_LEFT(panel), RECT_TOP(panel), RECT_WIDTH(panel), RECT_HEIGHT(panel), 2 * unit, VRMenu_Colour(gVR_rim_colours[0][0]));
@@ -250,47 +284,74 @@ static void VRMenu_DrawVROptions(int pCurrent_choice, int pCurrent_mode) {
         RECT_TOP(panel) + 8 * unit,
         title_font, "VR OPTIONS", gBack_screen->width);
 
-    VRMenu_Frame(RECT_LEFT(row), RECT_TOP(row), RECT_WIDTH(row), RECT_HEIGHT(row), 2 * unit,
-        VRMenu_Colour(selected ? gVR_rim_colours[1][0] : VR_COLOUR_DARK_RED));
-    TransDRPixelmapText(gBack_screen,
-        RECT_LEFT(row) + 8 * unit,
-        RECT_TOP(row) + (RECT_HEIGHT(row) - font->height) / 2,
-        font, "CAMERA BLOOD EFFECT", gBack_screen->width);
-    TransDRPixelmapText(gBack_screen,
-        RECT_LEFT(row) + RECT_WIDTH(row) - 8 * unit - DRTextWidth(font, value),
-        RECT_TOP(row) + (RECT_HEIGHT(row) - font->height) / 2,
-        font, value, gBack_screen->width);
+    for (i = 0; i < (int)BR_ASIZE(gVR_options); i++) {
+        VRMenu_RowRect(i, &row);
+        value = *gVR_options[i].value ? "ON" : "OFF";
+        // A label too long for the button font gets the small grey one
+        label_font = font;
+        if (DRTextWidth(font, gVR_options[i].label) + DRTextWidth(font, "OFF") + 24 * unit > RECT_WIDTH(&row)) {
+            label_font = &gFonts[kFont_GRYLIT];
+        }
+        VRMenu_Frame(RECT_LEFT(&row), RECT_TOP(&row), RECT_WIDTH(&row), RECT_HEIGHT(&row), 2 * unit,
+            VRMenu_Colour(pCurrent_choice == i ? gVR_rim_colours[1][0] : VR_COLOUR_DARK_RED));
+        TransDRPixelmapText(gBack_screen,
+            RECT_LEFT(&row) + 8 * unit,
+            RECT_TOP(&row) + (RECT_HEIGHT(&row) - label_font->height) / 2,
+            label_font, gVR_options[i].label, gBack_screen->width);
+        TransDRPixelmapText(gBack_screen,
+            RECT_LEFT(&row) + RECT_WIDTH(&row) - 8 * unit - DRTextWidth(font, value),
+            RECT_TOP(&row) + (RECT_HEIGHT(&row) - font->height) / 2,
+            font, value, gBack_screen->width);
+    }
     VRMenu_DrawButton(&gVR_done_rect, "DONE", pCurrent_choice == VRMENU_CHOICE_DONE);
 }
 
-// Confirming the option switches it and saves it; DONE leaves
+// ExtendDrawDistance at once: its far yon, or back to the farthest one the options screen offers
+static void VRMenu_ApplyDrawDistance(void) {
+    SetYon(harness_game_config.extend_draw_distance ? 1000.f : 35.f);
+    SetYonFactor(1.f);
+}
+
+// Confirming an option switches it and saves it; DONE leaves
 static int VRMenu_VROptionsGoAhead(int* pCurrent_choice, int* pCurrent_mode) {
-    if (*pCurrent_choice == VRMENU_CHOICE_BLOOD) {
-        harness_game_config.vr_blood = !harness_game_config.vr_blood;
-        Harness_SaveIniValue("VR", "Blood", harness_game_config.vr_blood ? "1" : "0");
+    char value[2];
+
+    if (*pCurrent_choice >= 0 && *pCurrent_choice < (int)BR_ASIZE(gVR_options)) {
+        *gVR_options[*pCurrent_choice].value = !*gVR_options[*pCurrent_choice].value;
+        if (gVR_options[*pCurrent_choice].apply != NULL) {
+            gVR_options[*pCurrent_choice].apply();
+        }
+        value[0] = *gVR_options[*pCurrent_choice].value ? '1' : '0';
+        value[1] = '\0';
+        Harness_SaveIniValue(gVR_options[*pCurrent_choice].section, gVR_options[*pCurrent_choice].name, value);
         return 0;
     }
     return 1;
 }
 
 void VRMenu_DoOptions(const tInterface_spec* pOptions_spec) {
-    static tMouse_area mouse_areas[2];
+    static tMouse_area mouse_areas[BR_ASIZE(gVR_options) + 1];
     tInterface_spec spec;
+    tRectile row;
     int i;
+    int j;
 
-    // DONE where the options screen has CANCEL, the option's row
-    mouse_areas[0] = pOptions_spec->mouse_areas[3];
-    mouse_areas[0].new_choice = VRMENU_CHOICE_DONE;
-    for (i = 0; i < 2; i++) {
-        mouse_areas[1].left[i] = gVR_row_rect.left[i];
-        mouse_areas[1].top[i] = gVR_row_rect.top[i];
-        mouse_areas[1].right[i] = gVR_row_rect.right[i];
-        mouse_areas[1].bottom[i] = gVR_row_rect.bottom[i];
+    // The options' rows, DONE where the options screen has CANCEL
+    for (j = 0; j < (int)BR_ASIZE(gVR_options); j++) {
+        VRMenu_RowRect(j, &row);
+        for (i = 0; i < 2; i++) {
+            mouse_areas[j].left[i] = row.left[i];
+            mouse_areas[j].top[i] = row.top[i];
+            mouse_areas[j].right[i] = row.right[i];
+            mouse_areas[j].bottom[i] = row.bottom[i];
+        }
+        mouse_areas[j].new_choice = j;
+        mouse_areas[j].new_mode = 0;
+        mouse_areas[j].available_when_typing = 0;
+        mouse_areas[j].mouse_click = NULL;
     }
-    mouse_areas[1].new_choice = VRMENU_CHOICE_BLOOD;
-    mouse_areas[1].new_mode = 0;
-    mouse_areas[1].available_when_typing = 0;
-    mouse_areas[1].mouse_click = NULL;
+    mouse_areas[j] = pOptions_spec->mouse_areas[3];
+    mouse_areas[j].new_choice = VRMENU_CHOICE_DONE;
 
     spec = *pOptions_spec;
     spec.initial_imode = 0;
@@ -302,12 +363,12 @@ void VRMenu_DoOptions(const tInterface_spec* pOptions_spec) {
         spec.move_up_new_mode[i] = -1;
         spec.move_up_delta[i] = -1;
         spec.move_up_min[i] = 0;
-        spec.move_up_max[i] = 1;
+        spec.move_up_max[i] = VRMENU_CHOICE_DONE;
         spec.move_up_proc[i] = NULL;
         spec.move_down_new_mode[i] = -1;
         spec.move_down_delta[i] = 1;
         spec.move_down_min[i] = 0;
-        spec.move_down_max[i] = 1;
+        spec.move_down_max[i] = VRMENU_CHOICE_DONE;
         spec.move_down_proc[i] = NULL;
         spec.go_ahead_allowed[i] = 1;
         spec.go_ahead_proc[i] = VRMenu_VROptionsGoAhead;
@@ -324,9 +385,9 @@ void VRMenu_DoOptions(const tInterface_spec* pOptions_spec) {
     spec.flicker_on_flics = NULL;
     spec.flicker_off_flics = NULL;
     spec.pushed_flics = NULL;
-    spec.number_of_mouse_areas = 2;
+    spec.number_of_mouse_areas = (int)BR_ASIZE(mouse_areas);
     spec.mouse_areas = mouse_areas;
     spec.number_of_recopy_areas = 0;
     spec.recopy_areas = NULL;
-    DoInterfaceScreen(&spec, 0, VRMENU_CHOICE_BLOOD);
+    DoInterfaceScreen(&spec, 0, 0);
 }

@@ -596,6 +596,11 @@ void InitialiseApplication(int pArgc, char** pArgv) {
 #ifdef DETHRACE_VR
     // VR: every graphics option at its best on each start ([VR] MaxDetail); the view distance only
     // grows, a larger one than the options screen offers (set in the race) is kept
+    // A yon of 1000 only comes from ExtendDrawDistance (saved with the options): switched off in the
+    // VR options, it goes back to the farthest one the options screen offers
+    if (!harness_game_config.extend_draw_distance && GetYon() >= 1000.f) {
+        SetYon(35.f);
+    }
     if (harness_game_config.vr_max_detail) {
         SetCarSimplificationLevel(0);
         SetCarTexturingLevel(eCTL_full);
