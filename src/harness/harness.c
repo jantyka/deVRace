@@ -329,6 +329,8 @@ int Harness_Init(int* argc, char* argv[]) {
     // VR: HUD and menus on a quad 1.8 m ahead, 1.6 m wide
     harness_game_config.vr_hud_distance = 1.8f;
     harness_game_config.vr_hud_width = 1.6f;
+    // VR: blood on the lens on
+    harness_game_config.vr_blood = 1;
 
     // install signal handler
     harness_game_config.install_signalhandler = 1;
@@ -690,6 +692,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.vr_hud_distance = atof(value);
     } else if (MATCH("VR", "HudWidth")) {
         harness_game_config.vr_hud_width = atof(value);
+    } else if (MATCH("VR", "Blood")) {
+        harness_game_config.vr_blood = (value[0] == '1');
     }
 
     else if (MATCH("Cheats", "EditMode")) {

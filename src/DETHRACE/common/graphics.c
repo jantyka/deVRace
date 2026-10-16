@@ -2018,6 +2018,9 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
     if (!VR_WantsEyeImages()) {
         return;
     }
+    car = &gProgram_state.current_car;
+    VR_SetBloodView(gProgram_state.cockpit_on, fabsf(car->speedo_speed) * WORLD_SCALE * 3600.f,
+        car->maxcurve > 0.f ? car->curvature / car->maxcurve : 0.f);
     camera_data = gCamera->type_data;
     saved_render_screen = gRender_screen;
     saved_depth_buffer = gDepth_buffer;

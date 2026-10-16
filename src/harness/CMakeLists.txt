@@ -66,6 +66,8 @@ if(DETHRACE_VR)
     target_sources(harness PRIVATE
         vr/vr.c
         vr/vr.h
+        vr/vr_blood.c
+        vr/vr_blood.h
         vr/vr_gfx.h
         vr/vr_gfx_egl.c
     )

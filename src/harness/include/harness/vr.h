@@ -39,4 +39,13 @@ void VR_GetEyeToCamera(int pEye, br_scalar pMetres_per_unit, br_matrix34* pMatri
 // edge (left and bottom negative), for BrDbSetFrustumOverride
 void VR_GetEyeFrustum(int pEye, br_scalar* pLeft, br_scalar* pRight, br_scalar* pTop, br_scalar* pBottom);
 
+// The player ran over a pedestrian at pSpeed_kmh. From 70 km/h on, blood may splatter onto the lens
+// (50 % chance, rising to 90 % at 100 km/h); the faster, the more splatters ([VR] Blood).
+void VR_SplatterBlood(float pSpeed_kmh);
+
+// Call once per frame during the race: in the cockpit view the blood sits on the windscreen and the
+// airstream pushes it up, the faster the car (pSpeed_kmh), the faster, and to the outside of a turn
+// (pSteering -1 right .. 1 left)
+void VR_SetBloodView(int pCockpit, float pSpeed_kmh, float pSteering);
+
 #endif

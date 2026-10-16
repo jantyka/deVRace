@@ -134,6 +134,7 @@ HudMessages = 1
 HudInstruments = 1
 HudPowerups = 1
 HideBorrowedBonnet = 1 ; hide bonnets a car borrows from another car in the cockpit view
+Blood = 1          ; blood may splatter onto the lens when you run over pedestrians at over 70 km/h
 
 [Gamepad]
 Enabled = 1

@@ -9,6 +9,9 @@
 #include "globvrpb.h"
 #include "graphics.h"
 #include "harness/trace.h"
+#ifdef DETHRACE_VR
+#include "harness/vr.h"
+#endif
 #include "input.h"
 #include "loading.h"
 #include "network.h"
@@ -2049,6 +2052,12 @@ void CheckPedestrianDeathScenario(tPedestrian_data* pPedestrian) {
                         if (the_car->driver == eDriver_local_human && !gRace_finished && pPedestrian->ref_number < 100) {
                             // Added by dethrace: light gamepad rumble when running over a pedestrian
                             PDGamepadRumble(eGamepad_rumble_pedestrian, 1.f);
+#ifdef DETHRACE_VR
+                            // VR: blood may splatter onto the lens when the car runs the pedestrian over at speed
+                            if (!proximity_rayed) {
+                                VR_SplatterBlood(fabsf(((tCar_spec*)the_car)->speedo_speed) * WORLD_SCALE * 3600.f);
+                            }
+#endif
                             PipeSinglePedIncident(pPedestrian - gPedestrian_array, incident_actor);
                             AwardTime(gPed_time_value[gProgram_state.skill_level]);
                             if (the_time - gLast_ped_splat_time <= 1000) {

@@ -143,6 +143,8 @@ typedef struct tHarness_game_config {
     // VR: distance and width of the HUD/menu quad in metres
     float vr_hud_distance;
     float vr_hud_width;
+    // VR: blood on the lens when running over pedestrians at speed
+    int vr_blood;
     int no_bind;
     char network_adapter_name[256];
     char platform_name[256];

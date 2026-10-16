@@ -4,13 +4,15 @@
 // The game renders its 3D pass once per eye into a render target (see harness/vr.h); on the next
 // swap the images are copied into the headset's swapchains. Eyes without an image this frame (menus,
 // loading) are shown black. The 2D overlay (menus, HUD) is captured separately by glrend and shown
-// on a quad layer in front of the player.
+// on a quad layer in front of the player. Blood on the lens (vr_blood.c) is a third, head locked
+// quad layer.
 //
 // Debugging: DEVRACE_VR_DUMP_FRAMES=<existing directory> writes both eye images as PPM files every
 // DEVRACE_VR_DUMP_INTERVAL frames the game rendered for the headset (default 90), at most
 // VR_DUMP_MAX_FRAMES times. Frames without game images (menus) are not counted.
 
 #include "vr.h"
+#include "vr_blood.h"
 #include "vr_gfx.h"
 
 #include "include/harness/config.h"
@@ -81,6 +83,24 @@ static br_pixelmap* hud_screen;
 static br_pixelmap* hud_target;
 static br_pixelmap* hud_depth;
 static GLuint hud_texture;
+
+// Blood on the lens: a quad fixed to the head (VIEW space), covering the field of view
+#define VR_BLOOD_SWAPCHAIN_SIZE 1280
+#define VR_BLOOD_DISTANCE 0.6f
+static tVR_eye_swapchain blood_swapchain;
+static XrSpace view_space = XR_NULL_HANDLE;
+static int blood_ready;
+static int blood_dump_count;
+
+// GL state the OpenXR layer changes while drawing into a swapchain image
+typedef struct tVR_gl_state {
+    GLint draw_framebuffer;
+    GLint read_framebuffer;
+    GLint viewport[4];
+    GLfloat clear_colour[4];
+    GLboolean colour_mask[4];
+    GLboolean scissor;
+} tVR_gl_state;
 
 static int debug_enabled;
 static const char* dump_dir;
@@ -328,6 +348,25 @@ static void VR_StartHud(br_pixelmap* pScreen) {
         (double)harness_game_config.vr_hud_width, (double)harness_game_config.vr_hud_distance);
 }
 
+// Blood on the lens ([VR] Blood). Without it the game runs as before.
+static void VR_StartBlood(void) {
+    XrReferenceSpaceCreateInfo space_info = { .type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO };
+
+    if (!harness_game_config.vr_blood) {
+        return;
+    }
+    space_info.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
+    space_info.poseInReferenceSpace.orientation.w = 1.0f;
+    if (!VR_Check(xrCreateReferenceSpace(session, &space_info, &view_space), "xrCreateReferenceSpace (view)")
+        || !VR_CreateSwapchain(&blood_swapchain, VR_BLOOD_SWAPCHAIN_SIZE, VR_BLOOD_SWAPCHAIN_SIZE)
+        || !VR_Blood_Init()) {
+        LOG_WARN2("%s", "No blood on the lens");
+        return;
+    }
+    blood_ready = 1;
+    LOG_INFO("Blood on the lens: %dx%d quad at %.2f m", blood_swapchain.width, blood_swapchain.height, (double)VR_BLOOD_DISTANCE);
+}
+
 static int VR_Start(void) {
     const char* interval;
 
@@ -435,19 +474,12 @@ static void VR_DumpImage(const char* pName, int pWidth, int pHeight) {
     free(pixels);
 }
 
-// Copies a texture of the swapchain's size into its next image (pTexture 0: clears it to black).
-// pDump_name: written as PPM when dumping is due, NULL for never.
-static int VR_CopyToSwapchain(tVR_eye_swapchain* pSwapchain, GLuint pTexture, const char* pDump_name) {
+// Acquires the next image of the swapchain and binds it for drawing, saving the GL state glrend
+// had (glrend keeps its own GL state; everything is left as it was by VR_EndSwapchainImage)
+static int VR_BeginSwapchainImage(tVR_eye_swapchain* pSwapchain, tVR_gl_state* pState) {
     XrSwapchainImageAcquireInfo acquire_info = { .type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
     XrSwapchainImageWaitInfo wait_info = { .type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
-    XrSwapchainImageReleaseInfo release_info = { .type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
     uint32_t image_index;
-    GLint old_draw_framebuffer;
-    GLint old_read_framebuffer;
-    GLint old_viewport[4];
-    GLfloat old_clear_colour[4];
-    GLboolean old_colour_mask[4];
-    GLboolean old_scissor;
 
     if (!VR_Check(xrAcquireSwapchainImage(pSwapchain->handle, &acquire_info, &image_index), "xrAcquireSwapchainImage")) {
         return 0;
@@ -457,19 +489,46 @@ static int VR_CopyToSwapchain(tVR_eye_swapchain* pSwapchain, GLuint pTexture, co
         return 0;
     }
 
-    // glrend keeps its own GL state; leave everything as it was
-    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &old_draw_framebuffer);
-    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &old_read_framebuffer);
-    glGetIntegerv(GL_VIEWPORT, old_viewport);
-    glGetFloatv(GL_COLOR_CLEAR_VALUE, old_clear_colour);
-    glGetBooleanv(GL_COLOR_WRITEMASK, old_colour_mask);
-    old_scissor = glIsEnabled(GL_SCISSOR_TEST);
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &pState->draw_framebuffer);
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &pState->read_framebuffer);
+    glGetIntegerv(GL_VIEWPORT, pState->viewport);
+    glGetFloatv(GL_COLOR_CLEAR_VALUE, pState->clear_colour);
+    glGetBooleanv(GL_COLOR_WRITEMASK, pState->colour_mask);
+    pState->scissor = glIsEnabled(GL_SCISSOR_TEST);
 
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, eye_framebuffer);
     glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pSwapchain->images[image_index].image, 0);
     glViewport(0, 0, pSwapchain->width, pSwapchain->height);
     glDisable(GL_SCISSOR_TEST);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    return 1;
+}
+
+// Restores the GL state and hands the image back to the runtime
+static int VR_EndSwapchainImage(tVR_eye_swapchain* pSwapchain, const tVR_gl_state* pState) {
+    XrSwapchainImageReleaseInfo release_info = { .type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
+
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, pState->draw_framebuffer);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, pState->read_framebuffer);
+    glViewport(pState->viewport[0], pState->viewport[1], pState->viewport[2], pState->viewport[3]);
+    glClearColor(pState->clear_colour[0], pState->clear_colour[1], pState->clear_colour[2], pState->clear_colour[3]);
+    glColorMask(pState->colour_mask[0], pState->colour_mask[1], pState->colour_mask[2], pState->colour_mask[3]);
+    if (pState->scissor) {
+        glEnable(GL_SCISSOR_TEST);
+    }
+
+    return VR_Check(xrReleaseSwapchainImage(pSwapchain->handle, &release_info), "xrReleaseSwapchainImage");
+}
+
+// Copies a texture of the swapchain's size into its next image (pTexture 0: clears it to black).
+// pDump_name: written as PPM when dumping is due, NULL for never.
+static int VR_CopyToSwapchain(tVR_eye_swapchain* pSwapchain, GLuint pTexture, const char* pDump_name) {
+    tVR_gl_state state;
+
+    if (!VR_BeginSwapchainImage(pSwapchain, &state)) {
+        return 0;
+    }
     if (pTexture != 0) {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, eye_read_framebuffer);
         glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pTexture, 0);
@@ -484,18 +543,7 @@ static int VR_CopyToSwapchain(tVR_eye_swapchain* pSwapchain, GLuint pTexture, co
         glBindFramebuffer(GL_READ_FRAMEBUFFER, eye_framebuffer);
         VR_DumpImage(pDump_name, pSwapchain->width, pSwapchain->height);
     }
-
-    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, old_draw_framebuffer);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, old_read_framebuffer);
-    glViewport(old_viewport[0], old_viewport[1], old_viewport[2], old_viewport[3]);
-    glClearColor(old_clear_colour[0], old_clear_colour[1], old_clear_colour[2], old_clear_colour[3]);
-    glColorMask(old_colour_mask[0], old_colour_mask[1], old_colour_mask[2], old_colour_mask[3]);
-    if (old_scissor) {
-        glEnable(GL_SCISSOR_TEST);
-    }
-
-    return VR_Check(xrReleaseSwapchainImage(pSwapchain->handle, &release_info), "xrReleaseSwapchainImage");
+    return VR_EndSwapchainImage(pSwapchain, &state);
 }
 
 static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view) {
@@ -547,6 +595,62 @@ static int VR_RenderHud(XrCompositionLayerQuad* pLayer) {
     return 1;
 }
 
+// Blood quad fixed to the head, a little larger than the field of view of both eyes
+static int VR_RenderBlood(XrCompositionLayerQuad* pLayer) {
+    tVR_gl_state state;
+    float half_width = 0.0f;
+    float half_height = 0.0f;
+    float aspect;
+    char name[32];
+    int i;
+
+    for (i = 0; i < VR_EYE_COUNT; i++) {
+        half_width = fmaxf(half_width, fmaxf(tanf(-views[i].fov.angleLeft), tanf(views[i].fov.angleRight)));
+        half_height = fmaxf(half_height, fmaxf(tanf(views[i].fov.angleUp), tanf(-views[i].fov.angleDown)));
+    }
+    half_width *= 1.08f * VR_BLOOD_DISTANCE;
+    half_height *= 1.08f * VR_BLOOD_DISTANCE;
+    if (half_width <= 0.0f || half_height <= 0.0f) {
+        return 0;
+    }
+    aspect = half_width / half_height;
+
+    if (!VR_BeginSwapchainImage(&blood_swapchain, &state)) {
+        return 0;
+    }
+    VR_Blood_Draw(blood_swapchain.width, blood_swapchain.height, aspect);
+    if (dump_dir != NULL && blood_dump_count < VR_DUMP_MAX_FRAMES && frame_index % dump_interval == 0) {
+        snprintf(name, sizeof(name), "blood%02d", blood_dump_count++);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, eye_framebuffer);
+        VR_DumpImage(name, blood_swapchain.width, blood_swapchain.height);
+    }
+    if (!VR_EndSwapchainImage(&blood_swapchain, &state)) {
+        return 0;
+    }
+
+    pLayer->type = XR_TYPE_COMPOSITION_LAYER_QUAD;
+    pLayer->next = NULL;
+    pLayer->layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
+    pLayer->space = view_space;
+    pLayer->eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+    pLayer->subImage.swapchain = blood_swapchain.handle;
+    pLayer->subImage.imageRect.offset.x = 0;
+    pLayer->subImage.imageRect.offset.y = 0;
+    pLayer->subImage.imageRect.extent.width = blood_swapchain.width;
+    pLayer->subImage.imageRect.extent.height = blood_swapchain.height;
+    pLayer->subImage.imageArrayIndex = 0;
+    pLayer->pose.orientation.x = 0.0f;
+    pLayer->pose.orientation.y = 0.0f;
+    pLayer->pose.orientation.z = 0.0f;
+    pLayer->pose.orientation.w = 1.0f;
+    pLayer->pose.position.x = 0.0f;
+    pLayer->pose.position.y = 0.0f;
+    pLayer->pose.position.z = -VR_BLOOD_DISTANCE;
+    pLayer->size.width = 2.0f * half_width;
+    pLayer->size.height = 2.0f * half_height;
+    return 1;
+}
+
 // Hands the eye images of the frame in progress to the runtime. They were rendered with the views
 // located in VR_BeginNextFrame, which are submitted unchanged with them.
 static void VR_EndCurrentFrame(void) {
@@ -554,7 +658,8 @@ static void VR_EndCurrentFrame(void) {
     XrCompositionLayerProjection layer = { .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION };
     XrCompositionLayerProjectionView layer_views[VR_EYE_COUNT];
     XrCompositionLayerQuad hud_layer;
-    const XrCompositionLayerBaseHeader* layers[2];
+    XrCompositionLayerQuad blood_layer;
+    const XrCompositionLayerBaseHeader* layers[3];
     uint32_t layer_count = 0;
     int rendered = 0;
     int i;
@@ -579,6 +684,13 @@ static void VR_EndCurrentFrame(void) {
     // Menus always; the HUD during the race only if wanted ([VR] Hud)
     if (frame_state.shouldRender && (!rendered || harness_game_config.vr_hud) && VR_RenderHud(&hud_layer)) {
         layers[layer_count++] = (const XrCompositionLayerBaseHeader*)&hud_layer;
+    }
+    // Blood on the lens in front of everything, as long as a splatter is visible
+    if (blood_ready) {
+        VR_Blood_Advance(frame_state.predictedDisplayPeriod / 1e9f);
+        if (frame_state.shouldRender && views_valid && VR_Blood_Active() && VR_RenderBlood(&blood_layer)) {
+            layers[layer_count++] = (const XrCompositionLayerBaseHeader*)&blood_layer;
+        }
     }
     end_info.displayTime = frame_state.predictedDisplayTime;
     end_info.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
@@ -643,6 +755,7 @@ static void VR_Swap(br_pixelmap* back_buffer) {
         if (vr_state == eVR_state_active) {
             // In OpenGL mode glrend passes its screen pixelmap to the swap function
             VR_StartHud(back_buffer);
+            VR_StartBlood();
         }
     }
     // Order of the OpenXR frame loop across the game's frames: the images of frame N are submitted
@@ -796,6 +909,17 @@ void VR_Shutdown(void) {
         free(eye_swapchains[i].images);
         memset(&eye_swapchains[i], 0, sizeof(eye_swapchains[i]));
     }
+    if (blood_swapchain.handle != XR_NULL_HANDLE) {
+        xrDestroySwapchain(blood_swapchain.handle);
+    }
+    free(blood_swapchain.images);
+    memset(&blood_swapchain, 0, sizeof(blood_swapchain));
+    if (view_space != XR_NULL_HANDLE) {
+        xrDestroySpace(view_space);
+        view_space = XR_NULL_HANDLE;
+    }
+    blood_ready = 0;
+    VR_Blood_Shutdown();
     if (space != XR_NULL_HANDLE) {
         xrDestroySpace(space);
         space = XR_NULL_HANDLE;
