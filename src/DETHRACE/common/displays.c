@@ -12,6 +12,9 @@
 #include "grafdata.h"
 #include "graphics.h"
 #include "harness/trace.h"
+#ifdef DETHRACE_VR
+#include "harness/vr.h"
+#endif
 #include "netgame.h"
 #include "pd/sys.h"
 #include "utility.h"
@@ -1447,6 +1450,12 @@ void DoSteeringWheel(tU32 pThe_time) {
     if (gProgram_state.current_car_index != gProgram_state.current_car.index) {
         return;
     }
+#ifdef DETHRACE_VR
+    // VR: no driver's hands, they belong to the 2D dashboard, which VR leaves out
+    if (VR_WantsEyeImages()) {
+        return;
+    }
+#endif
     if (gProgram_state.cockpit_on && gProgram_state.cockpit_image_index >= 0 && gProgram_state.which_view == eView_forward) {
         hands_index = (int)floor(gProgram_state.current_car.number_of_hands_images * ((-gProgram_state.current_car.steering_angle / 10.f + 1.f) / 2.0));
         if (hands_index < 0) {
