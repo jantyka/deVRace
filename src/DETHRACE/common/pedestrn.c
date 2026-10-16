@@ -4170,6 +4170,18 @@ void RenderProximityRays(br_pixelmap* pRender_screen, br_pixelmap* pDepth_buffer
     br_scalar t;
 
     the_time = GetTotalTime();
+#ifdef DETHRACE_VR
+    {
+        // VR: the eye passes (pTime 0) use the time of the frame's regular pass, so that the rays,
+        // whose zigzag is seeded from the time, look the same to both eyes
+        static tU32 frame_time;
+        if (pTime != 0) {
+            frame_time = the_time;
+        } else if (frame_time != 0) {
+            the_time = frame_time;
+        }
+    }
+#endif
 #ifdef DETHRACE_3DFX_PATCH
     if (gNo_2d_effects) {
         BrActorRemove(gLine_actor);
