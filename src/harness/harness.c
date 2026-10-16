@@ -291,8 +291,12 @@ int Harness_Init(int* argc, char* argv[]) {
     // this setting runs physics every frame, smoothing movement out.
     // disabled by default for now until we are happy it doesn't cause other issues
     harness_game_config.physics_per_frame = 0;
-    // Pedestrian spasm fix ([Slop] FixPedSpasm)
+    // Pedestrian spasm fix ([Slop] FixPedSpasm), on in deVRace
+#ifdef DETHRACE_VR
+    harness_game_config.fix_ped_spasm = 1;
+#else
     harness_game_config.fix_ped_spasm = 0;
+#endif
     // Round wheel models ([Slop] RoundWheels)
     harness_game_config.round_wheels = 0;
     // Draw distance of geometry, opponents, pedestrians and powerups ([Slop] ExtendDrawDistance)

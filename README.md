@@ -56,7 +56,7 @@ Default layout (Xbox names), changeable in `[Gamepad]`:
 
 ### From the dethrace-slop-pack
 
-Taken from [dethrace-slop-pack](https://github.com/TRPB/dethrace-slop-pack) by Tom Butler (the commits keep him as their author). All are off by default and can be switched in the VR options or in `[Slop]`:
+Taken from [dethrace-slop-pack](https://github.com/TRPB/dethrace-slop-pack) by Tom Butler (the commits keep him as their author). The pedestrian spasm fix is on by default in the VR build, the others are off (the extended draw distance and full detail opponents kept the headset below 144 Hz at times on the test system). All can be switched in the VR options or in `[Slop]`:
 
 - **Vastly extended draw distance** covering geometry, opponents, pedestrians and powerups (`ExtendDrawDistance`)
 - **Opponent car level of detail always max**, with 10 times the view distance (`OpponentMaxDetail`)
@@ -161,7 +161,7 @@ FarChase = 1.8     ; far chase camera: distance as a multiple of the normal one 
 ExtendDrawDistance = 0 ; vastly extended draw distance (yon 1000, pedestrians 20 times as far)
 OpponentMaxDetail = 0  ; opponent cars always at full detail, 10 times the view distance
 RoundWheels = 0        ; round wheel models (from the next race on)
-FixPedSpasm = 0        ; pedestrian spasm fix
+FixPedSpasm = 1        ; pedestrian spasm fix
 
 [Gamepad]
 Enabled = 1
