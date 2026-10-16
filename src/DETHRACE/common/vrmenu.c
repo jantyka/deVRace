@@ -172,6 +172,13 @@ static void VRMenu_DrawButton(const tRectile* pRect, char* pLabel, int pSelected
         font, pLabel, gBack_screen->width);
 }
 
+// The fonts of the VR menus: DRTextWidth needs them loaded, before the first text is drawn
+static void VRMenu_LoadFonts(void) {
+    LoadFont(gGraf_data_index ? kFont_BUTTOUT1 : kFont_BUTTOUT);
+    LoadFont(gGraf_data_index ? kFont_LITPLAQ1 : kFont_LITPLAQ);
+    LoadFont(kFont_GRYLIT);
+}
+
 // Options screen: draws the VR button over the copy of its background (recopy area)
 static void VRMenu_DrawOptions(int pCurrent_choice, int pCurrent_mode) {
     gVR_last_options_choice = pCurrent_choice;
@@ -240,6 +247,7 @@ tInterface_spec* VRMenu_OptionsSpec(const tInterface_spec* pOptions_spec) {
     gVR_options_spec.move_up_proc[0] = VRMenu_OptionsUp;
     gVR_options_spec.move_down_proc[0] = VRMenu_OptionsDown;
     gVR_last_options_choice = -1;
+    VRMenu_LoadFonts();
     return &gVR_options_spec;
 }
 
@@ -389,5 +397,6 @@ void VRMenu_DoOptions(const tInterface_spec* pOptions_spec) {
     spec.mouse_areas = mouse_areas;
     spec.number_of_recopy_areas = 0;
     spec.recopy_areas = NULL;
+    VRMenu_LoadFonts();
     DoInterfaceScreen(&spec, 0, 0);
 }
