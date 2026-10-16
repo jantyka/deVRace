@@ -26,6 +26,7 @@ The original Dethrace README is in [docs/README.dethrace.md](docs/README.dethrac
 - **VR options** in the game's options screen (VR button): switch the blood on the lens and the options from the slop pack (below) on and off; saved to `dethrace.ini`.
 - **Cockpit view without the 2D dashboard** and without the driver's hands, showing the car's 3D bonnet. Cars whose data borrows another car's bonnet (most opponents use the Eagle's) show none instead of the wrong one.
 - **Smoke, sparks, shadows, culling and cockpit shake** are rendered per eye; the action replay is recorded only once.
+- **Electro-bastard ray** drawn in the OpenGL mode, where it was missing (Dethrace pull request [#1131](https://github.com/dethrace-labs/dethrace/pull/1131) by Link4Electronics), with the same zigzag for both eyes.
 - **Native Wayland** client through SDL3 and EGL, using `XR_MNDX_egl_enable`. No X11/GLX.
 - Frame timing: 144 Hz on the Index with about 2 ms CPU time per frame on the test system.
 
@@ -209,7 +210,7 @@ Environment variables for debugging: `DEVRACE_VR_DEBUG=1` (per-eye diagnostics),
 
 ## Things planned
 
-- Fixing missing assets, like the lightning strike etc.
+- Fixing other missing assets and effects
 - Alternative 3D menu
 - Inside car models
 - Mod support
