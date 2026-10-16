@@ -87,6 +87,21 @@ static br_pixelmap* hud_target;
 static br_pixelmap* hud_depth;
 static GLuint hud_texture;
 
+// Rear view mirror in the cockpit view: its own render target on a quad in front of the HUD quad, at
+// the place the game picks (below the race timer). Created on first use.
+#define VR_MIRROR_WIDTH 768
+#define VR_MIRROR_HEIGHT 192
+#define VR_MIRROR_SIZE 0.35f    // width as a share of the HUD quad's width
+#define VR_MIRROR_FORWARD 0.01f // metres in front of the HUD quad
+static tVR_eye_swapchain mirror_swapchain;
+static br_pixelmap* mirror_target;
+static br_pixelmap* mirror_depth;
+static GLuint mirror_texture;
+static int mirror_failed;
+static int mirror_rendered;
+static float mirror_centre_x;
+static float mirror_top_y;
+
 // Blood on the lens: a quad fixed to the head (VIEW space), covering the field of view
 #define VR_BLOOD_SWAPCHAIN_SIZE 1280
 #define VR_BLOOD_DISTANCE 0.6f
@@ -643,6 +658,39 @@ static int VR_RenderHud(XrCompositionLayerQuad* pLayer) {
     return 1;
 }
 
+// Rear view mirror on the HUD quad, at the place given to VR_BeginMirror
+static int VR_RenderMirror(XrCompositionLayerQuad* pLayer) {
+    float hud_width;
+    float hud_height;
+
+    if (!VR_CopyToSwapchain(&mirror_swapchain, mirror_texture, "mirror")) {
+        return 0;
+    }
+    hud_width = harness_game_config.vr_hud_width;
+    hud_height = hud_width * hud_swapchain.height / hud_swapchain.width;
+    pLayer->type = XR_TYPE_COMPOSITION_LAYER_QUAD;
+    pLayer->next = NULL;
+    pLayer->layerFlags = 0;
+    pLayer->space = space;
+    pLayer->eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+    pLayer->subImage.swapchain = mirror_swapchain.handle;
+    pLayer->subImage.imageRect.offset.x = 0;
+    pLayer->subImage.imageRect.offset.y = 0;
+    pLayer->subImage.imageRect.extent.width = mirror_swapchain.width;
+    pLayer->subImage.imageRect.extent.height = mirror_swapchain.height;
+    pLayer->subImage.imageArrayIndex = 0;
+    pLayer->pose.orientation.x = 0.0f;
+    pLayer->pose.orientation.y = 0.0f;
+    pLayer->pose.orientation.z = 0.0f;
+    pLayer->pose.orientation.w = 1.0f;
+    pLayer->size.width = hud_width * VR_MIRROR_SIZE;
+    pLayer->size.height = pLayer->size.width * mirror_swapchain.height / mirror_swapchain.width;
+    pLayer->pose.position.x = (mirror_centre_x - 0.5f) * hud_width;
+    pLayer->pose.position.y = (0.5f - mirror_top_y) * hud_height - pLayer->size.height / 2.0f;
+    pLayer->pose.position.z = -harness_game_config.vr_hud_distance + VR_MIRROR_FORWARD;
+    return 1;
+}
+
 // Blood quad fixed to the head, a little larger than the field of view of both eyes
 static int VR_RenderBlood(XrCompositionLayerQuad* pLayer) {
     tVR_gl_state state;
@@ -706,8 +754,9 @@ static void VR_EndCurrentFrame(void) {
     XrCompositionLayerProjection layer = { .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION };
     XrCompositionLayerProjectionView layer_views[VR_EYE_COUNT];
     XrCompositionLayerQuad hud_layer;
+    XrCompositionLayerQuad mirror_layer;
     XrCompositionLayerQuad blood_layer;
-    const XrCompositionLayerBaseHeader* layers[3];
+    const XrCompositionLayerBaseHeader* layers[4];
     uint32_t layer_count = 0;
     int rendered = 0;
     int i;
@@ -733,6 +782,11 @@ static void VR_EndCurrentFrame(void) {
     if (frame_state.shouldRender && (!rendered || harness_game_config.vr_hud) && VR_RenderHud(&hud_layer)) {
         layers[layer_count++] = (const XrCompositionLayerBaseHeader*)&hud_layer;
     }
+    // Rear view mirror only in frames the game rendered it in
+    if (rendered && mirror_rendered && VR_RenderMirror(&mirror_layer)) {
+        layers[layer_count++] = (const XrCompositionLayerBaseHeader*)&mirror_layer;
+    }
+    mirror_rendered = 0;
     // Blood on the lens in front of everything, as long as a splatter is visible
     if (blood_ready) {
         VR_Blood_Advance(frame_state.predictedDisplayPeriod / 1e9f);
@@ -830,6 +884,40 @@ int VR_GetHudTarget(br_pixelmap** pColour, br_pixelmap** pDepth) {
     BrPixelmapFill(hud_depth, 0xFFFFFFFF);
     *pColour = hud_target;
     *pDepth = hud_depth;
+    return 1;
+}
+
+int VR_BeginMirror(float pCentre_x, float pTop_y, br_pixelmap** pColour, br_pixelmap** pDepth) {
+    if (!VR_WantsEyeImages() || mirror_failed || hud_screen == NULL) {
+        return 0;
+    }
+    if (mirror_target == NULL) {
+        mirror_failed = 1;
+        if (!VR_CreateSwapchain(&mirror_swapchain, VR_MIRROR_WIDTH, VR_MIRROR_HEIGHT)) {
+            LOG_WARN2("%s", "No swapchain for the rear view mirror");
+            return 0;
+        }
+        mirror_target = BrPixelmapMatchTypedSized(hud_screen, BR_PMMATCH_HIDDEN, BR_PMT_RGBX_888, VR_MIRROR_WIDTH, VR_MIRROR_HEIGHT);
+        if (mirror_target == NULL) {
+            LOG_WARN2("%s", "No render target for the rear view mirror");
+            return 0;
+        }
+        mirror_target->origin_x = mirror_target->width / 2;
+        mirror_target->origin_y = mirror_target->height / 2;
+        mirror_depth = BrPixelmapMatch(mirror_target, BR_PMMATCH_DEPTH_16);
+        if (mirror_depth == NULL || BrPixelmapQuery(mirror_target, &mirror_texture, BRT_OPENGL_TEXTURE_U32) != BRE_OK || mirror_texture == 0) {
+            LOG_WARN2("%s", "No depth buffer or texture for the rear view mirror");
+            mirror_target = NULL;
+            return 0;
+        }
+        mirror_failed = 0;
+        LOG_INFO("Rear view mirror: %dx%d", VR_MIRROR_WIDTH, VR_MIRROR_HEIGHT);
+    }
+    *pColour = mirror_target;
+    *pDepth = mirror_depth;
+    mirror_centre_x = pCentre_x;
+    mirror_top_y = pTop_y;
+    mirror_rendered = 1;
     return 1;
 }
 
@@ -965,6 +1053,15 @@ void VR_Shutdown(void) {
     }
     free(blood_swapchain.images);
     memset(&blood_swapchain, 0, sizeof(blood_swapchain));
+    if (mirror_swapchain.handle != XR_NULL_HANDLE) {
+        xrDestroySwapchain(mirror_swapchain.handle);
+    }
+    free(mirror_swapchain.images);
+    memset(&mirror_swapchain, 0, sizeof(mirror_swapchain));
+    mirror_target = NULL;
+    mirror_depth = NULL;
+    mirror_texture = 0;
+    mirror_rendered = 0;
     if (view_space != XR_NULL_HANDLE) {
         xrDestroySpace(view_space);
         view_space = XR_NULL_HANDLE;

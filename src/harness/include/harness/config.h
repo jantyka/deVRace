@@ -148,6 +148,8 @@ typedef struct tHarness_game_config {
     int vr_blood;
     // VR: all graphics options at their best on each start
     int vr_max_detail;
+    // VR: rear view mirror in the cockpit view, below the race timer
+    int vr_mirror;
     // VR: distance of the far chase camera as a multiple of the normal one (0 = no far chase camera)
     float vr_far_chase;
     int no_bind;

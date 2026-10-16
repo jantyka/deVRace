@@ -47,6 +47,12 @@ void VR_SplatterBlood(float pSpeed_kmh);
 // last call: moving the mouse too fast splatters blood onto the lens as well ([VR] Blood)
 void VR_SplatterBloodMenu(float pScreens_per_second, float pSeconds);
 
+// Render target of the rear view mirror, shown on a quad of its own in front of the HUD quad, its
+// top edge centred on pCentre_x, pTop_y (shares of the HUD's width and height from the top left).
+// Call right before rendering the mirror scene: the mirror is only shown in frames this was called
+// in. Returns 0 without (no headset frame, or no target could be created).
+int VR_BeginMirror(float pCentre_x, float pTop_y, br_pixelmap** pColour, br_pixelmap** pDepth);
+
 // Moves the centre of the view to where the head is and looks now (on the next headset frame)
 void VR_Recenter(void);
 

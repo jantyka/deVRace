@@ -21,8 +21,9 @@ The original Dethrace README is in [docs/README.dethrace.md](docs/README.dethrac
 - **Far chase camera** as in other racing games: the view key cycles cockpit, chase and far chase view (`FarChase`).
 - **Recenter** the view with the gamepad (LB), in the race and in the menus.
 - **Blood on the lens** when you run over pedestrians at speed: drips run down the lens in the chase views (smaller and fewer in the far one); in the cockpit the airstream pushes it up the windscreen and to the outside of a turn. Moving the mouse too fast in the menus splatters some too.
+- **Rear view mirror** in the cockpit view, as a rectangle right below the race timer (`Mirror`).
 - **Graphics options at their best** on each start (`MaxDetail`).
-- **Cockpit view without the 2D dashboard**, showing the car's 3D bonnet. Cars whose data borrows another car's bonnet (most opponents use the Eagle's) show none instead of the wrong one.
+- **Cockpit view without the 2D dashboard** and without the driver's hands, showing the car's 3D bonnet. Cars whose data borrows another car's bonnet (most opponents use the Eagle's) show none instead of the wrong one.
 - **Smoke, sparks, shadows, culling and cockpit shake** are rendered per eye; the action replay is recorded only once.
 - **Native Wayland** client through SDL3 and EGL, using `XR_MNDX_egl_enable`. No X11/GLX.
 - Frame timing: 144 Hz on the Index with about 2 ms CPU time per frame on the test system.
@@ -140,6 +141,7 @@ HudInstruments = 1
 HudPowerups = 1
 HideBorrowedBonnet = 1 ; hide bonnets a car borrows from another car in the cockpit view
 Blood = 1          ; blood may splatter onto the lens when you run over pedestrians at over 70 km/h
+Mirror = 1         ; rear view mirror in the cockpit view, below the race timer
 MaxDetail = 1      ; set every graphics option to its best on each start
 FarChase = 1.8     ; far chase camera: distance as a multiple of the normal one (0 = no far chase camera)
 
@@ -185,7 +187,7 @@ Environment variables for debugging: `DEVRACE_VR_DEBUG=1` (per-eye diagnostics),
 - Car shadows are not drawn in the 3dfx mode (also not on the monitor).
 - Loading screens pause the headset image briefly.
 - The view is centred where your head is when the game starts; to recenter it there is only the gamepad (LB), no key.
-- No rear view mirror and no 2D dashboard in VR.
+- No 2D dashboard in VR.
 
 ## Things planned
 

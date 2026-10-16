@@ -2104,6 +2104,60 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
     BrMatrix34Copy(&gCamera->t.t.mat, &saved_camera_matrix);
     BrMatrix34Copy(&gCamera_to_world, &saved_camera_to_world);
 }
+
+// VR: the rear view mirror of the cockpit view, as a rectangle of its own on the HUD quad right below
+// the race timer (VR leaves out the 2D dashboard it belongs to on the monitor). Renders the scene as
+// the mirror block in RenderAFrame does, into the mirror's render target, with its aspect ratio and a
+// time of 0 for smoke and sparks (the regular pass advances them). Returns non-zero if it rendered.
+static int VR_RenderRearviewMirror(int pCockpit_on) {
+    br_pixelmap* colour;
+    br_pixelmap* depth;
+    br_matrix34 old_mirror_cam_matrix;
+    br_camera* camera_data;
+    br_scalar saved_aspect;
+    tHeadup* timer;
+    float centre_x = 0.5f;
+    float top_y = 0.1f;
+
+    if (!harness_game_config.vr_mirror || !gProgram_state.mirror_on || !pCockpit_on
+        || gProgram_state.which_view != eView_forward) {
+        return 0;
+    }
+    // Right below the timer, centred on it
+    if (gTimer_headup >= 0 && gHeadups[gTimer_headup].type == eHeadup_coloured_text) {
+        timer = &gHeadups[gTimer_headup];
+        centre_x = (timer->x + DRTextWidth(timer->data.coloured_text_info.coloured_font, timer->data.text_info.text) / 2.f) / gBack_screen->width;
+        top_y = (timer->y + timer->data.coloured_text_info.coloured_font->height + 4.f) / gBack_screen->height;
+    }
+    if (!VR_BeginMirror(centre_x, top_y, &colour, &depth)) {
+        return 0;
+    }
+    camera_data = gRearview_camera->type_data;
+    saved_aspect = camera_data->aspect;
+    camera_data->aspect = colour->width / (float)colour->height;
+    BrMatrix34Copy(&old_mirror_cam_matrix, &gRearview_camera->t.t.mat);
+    BrPixelmapFill(depth, 0xFFFFFFFF);
+    gRendering_mirror = 1;
+    DoSpecialCameraEffect(gRearview_camera, &gRearview_camera_to_world);
+    BrPixelmapFill(colour, VR_SkyFillColour());
+    BrZbSceneRenderBegin(gUniverse_actor, gRearview_camera, colour, depth);
+    ProcessNonTrackActors(colour, depth, gRearview_camera, &gRearview_camera_to_world, &old_mirror_cam_matrix);
+    ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gRearview_camera, &gRearview_camera_to_world, 0);
+    RenderLollipops();
+    DepthEffectSky(colour, depth, gRearview_camera, &gRearview_camera_to_world);
+    DepthEffect(colour, depth, gRearview_camera, &gRearview_camera_to_world);
+    if (!gAusterity_mode) {
+        ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gRearview_camera, &gRearview_camera_to_world, 1);
+    }
+    RenderSplashes();
+    RenderSmoke(colour, depth, gRearview_camera, &gRearview_camera_to_world, 0);
+    RenderSparks(colour, depth, gRearview_camera, &gRearview_camera_to_world, 0);
+    BrZbSceneRenderEnd();
+    BrMatrix34Copy(&gRearview_camera->t.t.mat, &old_mirror_cam_matrix);
+    camera_data->aspect = saved_aspect;
+    gRendering_mirror = 0;
+    return 1;
+}
 #endif
 
 void RenderAFrame(int pDepth_mask_on) {
@@ -2141,7 +2195,7 @@ void RenderAFrame(int pDepth_mask_on) {
     cockpit_on = gProgram_state.cockpit_on && gProgram_state.cockpit_image_index >= 0 && !gMap_mode;
     gMirror_on__graphics = gProgram_state.mirror_on && cockpit_on && gProgram_state.which_view == eView_forward;
 #ifdef DETHRACE_VR
-    // VR: no rear view mirror in the headset yet (it belongs to the 2D dashboard, which VR leaves out)
+    // VR: the rear view mirror of the 2D dashboard is left out, VR_RenderRearviewMirror below shows it
     if (VR_WantsEyeImages()) {
         gMirror_on__graphics = 0;
     }
@@ -2396,6 +2450,12 @@ void RenderAFrame(int pDepth_mask_on) {
         BrMatrix34Copy(&gRearview_camera->t.t.mat, &old_mirror_cam_matrix);
         gRendering_mirror = 0;
     }
+#ifdef DETHRACE_VR
+    // VR: the rear view mirror on a quad of its own; also tells PointOutOfSight that it is shown
+    if (VR_WantsEyeImages()) {
+        gMirror_on__graphics = VR_RenderRearviewMirror(cockpit_on);
+    }
+#endif
     if (gMap_mode) {
         if (gNet_mode == eNet_mode_none) {
             GetTimerString(the_text, 0);
