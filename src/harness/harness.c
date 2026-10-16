@@ -899,6 +899,12 @@ int Harness_SaveIniValue(const char* pSection, const char* pName, const char* pV
     if (in != NULL) {
         fclose(in);
     }
+#ifdef _WIN32
+    // rename does not replace an existing file there
+    if (in != NULL) {
+        remove(path);
+    }
+#endif
     if (fclose(out) != 0 || rename(temp_path, path) != 0) {
         LOG_WARN2("Cannot write %s", path);
         remove(temp_path);
