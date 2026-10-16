@@ -278,6 +278,7 @@ static void SDL2_Harness_CreateWindow(const char* title, int width, int height, 
             LOG_PANIC2("Failed to create window: %s", SDL2_GetError());
         }
 
+        SDL2_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
         SDL2_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
         SDL2_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
         SDL2_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
