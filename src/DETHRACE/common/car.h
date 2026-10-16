@@ -17,6 +17,9 @@ extern int gFace_num__car;                                // suffix added to avo
 extern br_angle gOld_yaw__car;                            // suffix added to avoid duplicate symbol
 extern br_angle gOld_zoom;
 extern br_vector3 gCamera_pos_before_collide;
+#ifdef DETHRACE_VR
+extern int gVR_far_chase_camera;
+#endif
 extern int gMetal_crunch_sound_id__car[5]; // suffix added to avoid duplicate symbol
 extern int gMetal_scrape_sound_id__car[3]; // suffix added to avoid duplicate symbol
 extern int gCar_car_collisions;

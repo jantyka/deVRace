@@ -41,6 +41,15 @@
 #define VR_BLOOD_WIND_MIN_KMH 15.0f
 #define VR_BLOOD_WIND_FULL_KMH 100.0f
 
+// Far chase camera: splatters this much smaller, and this share fewer
+#define VR_BLOOD_FAR_SIZE 0.6f
+#define VR_BLOOD_FAR_FEWER 0.3f
+
+// Menus: moving the mouse faster than this many screen sizes per second splatters blood, at most once
+// per cooldown
+#define VR_BLOOD_MENU_SCREENS 4.0f
+#define VR_BLOOD_MENU_COOLDOWN 1.2f
+
 typedef struct tVR_splat {
     float x; // where it hit, 0..1 from the left and bottom edge of the quad
     float y;
@@ -241,9 +250,11 @@ static GLint uniform_c;
 static GLint uniform_d;
 static GLint uniform_p;
 static float quad_aspect = 1.0f;
-static int view_cockpit;
+static int view = VR_VIEW_CHASE;
 static float view_speed_kmh;
 static float view_steering;
+static float menu_speed;
+static float menu_cooldown;
 static uint32_t random_state = 0x9e3779b9u;
 static float test_kmh;
 static float test_timer;
@@ -376,6 +387,13 @@ static void VR_Blood_Spawn(float pSpeed_kmh) {
     if (count > VR_BLOOD_MAX_PER_HIT) {
         count = VR_BLOOD_MAX_PER_HIT;
     }
+    // Far chase camera: 30 % fewer, at least one
+    if (view == VR_VIEW_FAR_CHASE) {
+        count = (int)(count * (1.0f - VR_BLOOD_FAR_FEWER) + 0.5f);
+        if (count < 1) {
+            count = 1;
+        }
+    }
     for (i = 0; i < count; i++) {
         // A free slot, otherwise the oldest splatter makes room
         slot = 0;
@@ -392,7 +410,7 @@ static void VR_Blood_Spawn(float pSpeed_kmh) {
         // down, as the blood is pushed up from there.
         for (tries = 0; tries < 8; tries++) {
             x = 0.06f + 0.88f * VR_Blood_Random();
-            y = view_cockpit ? 0.08f + 0.75f * VR_Blood_Random() : 0.12f + 0.83f * VR_Blood_Random();
+            y = view == VR_VIEW_COCKPIT ? 0.08f + 0.75f * VR_Blood_Random() : 0.12f + 0.83f * VR_Blood_Random();
             dx = (x - 0.5f) * quad_aspect;
             if (dx * dx + (y - 0.5f) * (y - 0.5f) > 0.08f * 0.08f) {
                 break;
@@ -403,7 +421,10 @@ static void VR_Blood_Spawn(float pSpeed_kmh) {
         splat->y = y;
         splat->age = -0.15f * VR_Blood_Random();
         VR_Blood_Shape(splat, over);
-        splat->windscreen = view_cockpit;
+        if (view == VR_VIEW_FAR_CHASE) {
+            splat->radius *= VR_BLOOD_FAR_SIZE;
+        }
+        splat->windscreen = view == VR_VIEW_COCKPIT;
         splat->blob_x = x;
         splat->blob_y = y;
         splat->mass = 1.0f;
@@ -434,8 +455,29 @@ void VR_SplatterBlood(float pSpeed_kmh) {
     }
 }
 
-void VR_SetBloodView(int pCockpit, float pSpeed_kmh, float pSteering) {
-    view_cockpit = pCockpit;
+void VR_SplatterBloodMenu(float pScreens_per_second, float pSeconds) {
+    int race_view;
+
+    if (!harness_game_config.vr_blood || pSeconds <= 0.0f) {
+        return;
+    }
+    // Smoothed over about 0.1 s, so that a single jump of the cursor does not count
+    menu_speed += (pScreens_per_second - menu_speed) * fminf(pSeconds / 0.1f, 1.0f);
+    menu_cooldown -= pSeconds;
+    if (menu_speed < VR_BLOOD_MENU_SCREENS || menu_cooldown > 0.0f) {
+        return;
+    }
+    menu_cooldown = VR_BLOOD_MENU_COOLDOWN;
+    LOG_INFO("Mouse moved at %.1f screens/s in the menu: blood on the lens", (double)menu_speed);
+    // Always the lens version, whichever view the last race ended in; the faster, the more splatters
+    race_view = view;
+    view = VR_VIEW_CHASE;
+    VR_Blood_Spawn(VR_BLOOD_MIN_KMH + (menu_speed - VR_BLOOD_MENU_SCREENS) * 15.0f);
+    view = race_view;
+}
+
+void VR_SetBloodView(int pView, float pSpeed_kmh, float pSteering) {
+    view = pView;
     view_speed_kmh = pSpeed_kmh;
     view_steering = VR_Blood_Clamp(pSteering, -1.0f, 1.0f);
 }

@@ -43,9 +43,22 @@ void VR_GetEyeFrustum(int pEye, br_scalar* pLeft, br_scalar* pRight, br_scalar* 
 // (50 % chance, rising to 90 % at 100 km/h); the faster, the more splatters ([VR] Blood).
 void VR_SplatterBlood(float pSpeed_kmh);
 
-// Call once per frame during the race: in the cockpit view the blood sits on the windscreen and the
-// airstream pushes it up, the faster the car (pSpeed_kmh), the faster, and to the outside of a turn
-// (pSteering -1 right .. 1 left)
-void VR_SetBloodView(int pCockpit, float pSpeed_kmh, float pSteering);
+// Call from the menus' mouse cursor with its speed in screen sizes per second and the time since the
+// last call: moving the mouse too fast splatters blood onto the lens as well ([VR] Blood)
+void VR_SplatterBloodMenu(float pScreens_per_second, float pSeconds);
+
+// Moves the centre of the view to where the head is and looks now (on the next headset frame)
+void VR_Recenter(void);
+
+// Views for VR_SetBloodView
+#define VR_VIEW_CHASE 0
+#define VR_VIEW_COCKPIT 1
+#define VR_VIEW_FAR_CHASE 2
+
+// Call once per frame during the race with the view (VR_VIEW_*): in the cockpit view the blood sits
+// on the windscreen and the airstream pushes it up, the faster the car (pSpeed_kmh), the faster, and
+// to the outside of a turn (pSteering -1 right .. 1 left). In the far chase view the splatters are
+// smaller and 30 % fewer.
+void VR_SetBloodView(int pView, float pSpeed_kmh, float pSteering);
 
 #endif

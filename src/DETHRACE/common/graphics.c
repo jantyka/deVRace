@@ -2009,6 +2009,7 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
     br_angle saved_fov;
     br_scalar saved_aspect;
     br_scalar left, right, top, bottom;
+    int blood_view;
     br_scalar half_width, half_height;
     tCar_spec* car;
     int saved_car_actor;
@@ -2019,7 +2020,14 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
         return;
     }
     car = &gProgram_state.current_car;
-    VR_SetBloodView(gProgram_state.cockpit_on, fabsf(car->speedo_speed) * WORLD_SCALE * 3600.f,
+    if (gProgram_state.cockpit_on) {
+        blood_view = VR_VIEW_COCKPIT;
+    } else if (gVR_far_chase_camera) {
+        blood_view = VR_VIEW_FAR_CHASE;
+    } else {
+        blood_view = VR_VIEW_CHASE;
+    }
+    VR_SetBloodView(blood_view, fabsf(car->speedo_speed) * WORLD_SCALE * 3600.f,
         car->maxcurve > 0.f ? car->curvature / car->maxcurve : 0.f);
     camera_data = gCamera->type_data;
     saved_render_screen = gRender_screen;
@@ -3373,6 +3381,16 @@ int DoMouseCursor(void) {
                 (button_is_down && !button_was_down) ? 50 : 400);
         }
         ProcessCursorGiblets(period);
+#ifdef DETHRACE_VR
+        // VR: moving the mouse too fast splatters blood onto the lens
+        if (!gProgram_state.sausage_eater_mode) {
+            VR_SplatterBloodMenu(
+                hypotf((x_coord - gMouse_last_x_coord) / (float)gGraf_specs[gGraf_spec_index].total_width,
+                    (y_coord - gMouse_last_y_coord) / (float)gGraf_specs[gGraf_spec_index].total_height)
+                    * 1000.f / period,
+                period / 1000.f);
+        }
+#endif
         SaveTransient(gCursor_transient_index,
             x_coord - gCursor_x_offsets[gCurrent_cursor_index + cursor_offset] * gGraf_specs[gGraf_spec_index].total_width / 640u,
             y_coord - gCursor_y_offsets[gCurrent_cursor_index + cursor_offset] * gGraf_specs[gGraf_spec_index].total_height / 480u);

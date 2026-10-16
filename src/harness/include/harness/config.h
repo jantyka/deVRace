@@ -72,6 +72,7 @@ typedef enum tHarness_gamepad_action {
     eGamepad_action_hud_info,
     eGamepad_action_hud_avatar,
     eGamepad_action_hud_other,
+    eGamepad_action_recenter,
     eGamepad_action_menu_confirm,
     eGamepad_action_menu_back,
     eGamepad_action_count
@@ -145,6 +146,8 @@ typedef struct tHarness_game_config {
     float vr_hud_width;
     // VR: blood on the lens when running over pedestrians at speed
     int vr_blood;
+    // VR: distance of the far chase camera as a multiple of the normal one (0 = no far chase camera)
+    float vr_far_chase;
     int no_bind;
     char network_adapter_name[256];
     char platform_name[256];

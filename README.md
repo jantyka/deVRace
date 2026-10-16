@@ -18,6 +18,9 @@ The original Dethrace README is in [docs/README.dethrace.md](docs/README.dethrac
 - **Per-eye asymmetric projection** from the OpenXR runtime, rendered by Dethrace's OpenGL ("3dfx") renderer into one render target per eye.
 - **Sky fixed to the world**: the original sky strip is rebuilt as a cylinder around you, so it stays put when you look around.
 - **Menus and HUD on a panel** in front of you (OpenXR quad layer). In the race the HUD floats over the 3D view; every HUD element can be switched on and off.
+- **Far chase camera** as in other racing games: the view key cycles cockpit, chase and far chase view (`FarChase`).
+- **Recenter** the view with the gamepad (LB), in the race and in the menus.
+- **Blood on the lens** when you run over pedestrians at speed: drips run down the lens in the chase views (smaller and fewer in the far one); in the cockpit the airstream pushes it up the windscreen and to the outside of a turn. Moving the mouse too fast in the menus splatters some too.
 - **Cockpit view without the 2D dashboard**, showing the car's 3D bonnet. Cars whose data borrows another car's bonnet (most opponents use the Eagle's) show none instead of the wrong one.
 - **Smoke, sparks, shadows, culling and cockpit shake** are rendered per eye; the action replay is recorded only once.
 - **Native Wayland** client through SDL3 and EGL, using `XR_MNDX_egl_enable`. No X11/GLX.
@@ -33,13 +36,14 @@ Default layout (Xbox names), changeable in `[Gamepad]`:
 |---|---|---|
 | Left stick | Steer (analog) | Navigate |
 | RT / LT | Accelerate / brake and reverse (analog) | |
-| A | Accelerate | Confirm |
+| A | Handbrake | Confirm |
 | X (hold) | Repair | Back |
 | Y | Recovery | |
 | B | Map | |
-| LB / RB | Handbrake / gear down | |
+| LB | VR: recenter the view | VR: recenter the view |
+| RB | Gear down | |
 | Left stick press | Horn | |
-| View (Back) | Cockpit / chase view | |
+| View (Back) | Cockpit / chase / far chase view | |
 | Start | Menu | Back |
 | Right stick left / up / right | Look left / forward / right | |
 | D-pad down | VR: all HUD elements on/off | Navigate |
@@ -135,14 +139,15 @@ HudInstruments = 1
 HudPowerups = 1
 HideBorrowedBonnet = 1 ; hide bonnets a car borrows from another car in the cockpit view
 Blood = 1          ; blood may splatter onto the lens when you run over pedestrians at over 70 km/h
+FarChase = 1.8     ; far chase camera: distance as a multiple of the normal one (0 = no far chase camera)
 
 [Gamepad]
 Enabled = 1
 ; actions: one or two inputs, comma separated. Inputs:
 ;   A B X Y Back Start LeftStick RightStick LB RB DpadUp DpadDown DpadLeft DpadRight LT RT
 ;   LeftStickLeft/Right/Up/Down RightStickLeft/Right/Up/Down None
-Accelerate = A
-Handbrake = LB
+Accelerate = None
+Handbrake = A
 GearDown = RB
 Horn = LeftStick
 Recovery = Y
@@ -157,6 +162,7 @@ HudAll = DpadDown
 HudInfo = DpadUp
 HudAvatar = DpadLeft
 HudOther = DpadRight
+Recenter = LB
 MenuConfirm = A
 MenuBack = X, Start
 ; analog axes: LeftStickX RightStickX LT RT None
@@ -176,7 +182,7 @@ Environment variables for debugging: `DEVRACE_VR_DEBUG=1` (per-eye diagnostics),
 - The first SteamVR start after connecting the Index may hang for some seconds and restart its compositor; a second start works ([SteamVR-for-Linux#948](https://github.com/ValveSoftware/SteamVR-for-Linux/issues/948)).
 - Car shadows are not drawn in the 3dfx mode (also not on the monitor).
 - Loading screens pause the headset image briefly.
-- No recenter key yet; the view is centred where your head is when the game starts.
+- The view is centred where your head is when the game starts; to recenter it there is only the gamepad (LB), no key.
 - No rear view mirror and no 2D dashboard in VR.
 
 ## Things planned

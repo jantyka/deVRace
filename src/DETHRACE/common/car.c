@@ -76,6 +76,11 @@ br_angle gOld_zoom = 0;
 // GLOBAL: CARM95 0x00514cf8
 br_vector3 gCamera_pos_before_collide = { { 0 } };
 
+#ifdef DETHRACE_VR
+// VR: the chase camera is in its far position (as the far chase view of other racing games)
+int gVR_far_chase_camera;
+#endif
+
 // GLOBAL: CARM95 0x00514d08
 int gMetal_crunch_sound_id__car[5] = {
     // suffix added to avoid duplicate symbol
@@ -5421,6 +5426,11 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
             gCamera_mode = 0;
         }
         dist = (br_scalar)sqrt(gCamera_zoom) + 4.f / WORLD_SCALE;
+#ifdef DETHRACE_VR
+        if (gVR_far_chase_camera) {
+            dist *= harness_game_config.vr_far_chase;
+        }
+#endif
         if (!gCamera_mode || gCamera_mode == -1) {
             BrVector3Copy(&vn, &c->direction);
             MoveWithWheels(c, &vn, manual_swing);
@@ -5458,6 +5468,12 @@ void NormalPositionExternalCamera(tCar_spec* c, tU32 pTime) {
             BrVector3Add((br_vector3*)m2->m[3], &c->pos, &vn);
         }
         height_inc = gCamera_zoom * gCamera_zoom + 0.3f;
+#ifdef DETHRACE_VR
+        // Far chase camera: also higher up, by half the factor of its distance
+        if (gVR_far_chase_camera) {
+            height_inc *= 1.f + (harness_game_config.vr_far_chase - 1.f) / 2.f;
+        }
+#endif
         time = pTime * 0.001f;
         if (!gCamera_frozen || gAction_replay_mode) {
             if (pTime >= 5000) {

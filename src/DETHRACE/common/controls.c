@@ -14,6 +14,7 @@
 #include "globvrpb.h"
 #include "grafdata.h"
 #include "graphics.h"
+#include "harness/config.h"
 #include "harness/trace.h"
 #include "init.h"
 #include "input.h"
@@ -37,6 +38,10 @@
 #include "world.h"
 #include <stdlib.h>
 
+#ifdef DETHRACE_VR
+static void VR_CycleCameraView(void);
+#endif
+
 // GLOBAL: CARM95 0x0051b1c0
 tToggle_element gToggle_array[] = {
     { KEYMAP_MIRROR, -2, 1, 1, 0, ToggleMirror },
@@ -44,7 +49,11 @@ tToggle_element gToggle_array[] = {
     { KEYMAP_PRATCAM, -2, 1, 1, 0, TogglePratcam },
     { KEYMAP_RECOVERY, -2, 1, 1, 0, SetRecovery },
     { KEYMAP_CTRL_ABORT_RACE, 7, 1, 1, 0, AbortRace },
+#ifdef DETHRACE_VR
+    { KEYMAP_COCKPIT, -2, 1, 1, 0, VR_CycleCameraView },
+#else
     { KEYMAP_COCKPIT, -2, 1, 1, 0, ToggleCockpit },
+#endif
     { KEYMAP_LOOK_LEFT, -2, 1, 1, 0, LookLeft },
     { KEYMAP_LOOK_FORWARD, -2, 1, 1, 0, LookForward },
     { KEYMAP_LOOK_RIGHT, -2, 1, 1, 0, LookRight },
@@ -1112,6 +1121,23 @@ void ToggleCockpit(void) {
         }
     }
 }
+
+#ifdef DETHRACE_VR
+// VR: the view key cycles cockpit, chase and far chase camera ([VR] FarChase, 0 = cockpit and chase
+// only as in the original)
+static void VR_CycleCameraView(void) {
+
+    if (gProgram_state.cockpit_on || gMap_mode || harness_game_config.vr_far_chase <= 0.f
+        || gVR_far_chase_camera || &gProgram_state.current_car != gCar_to_view) {
+        gVR_far_chase_camera = 0;
+        ToggleCockpit();
+    } else {
+        gVR_far_chase_camera = 1;
+        InitialiseExternalCamera();
+        PositionExternalCamera(&gProgram_state.current_car, 1);
+    }
+}
+#endif
 
 // IDA: void __cdecl ToggleMirror()
 // FUNCTION: CARM95 0x004a1895

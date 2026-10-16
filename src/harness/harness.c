@@ -331,6 +331,8 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.vr_hud_width = 1.6f;
     // VR: blood on the lens on
     harness_game_config.vr_blood = 1;
+    // VR: the view key cycles cockpit, chase and a far chase camera 1.8 times as far away
+    harness_game_config.vr_far_chase = 1.8f;
 
     // install signal handler
     harness_game_config.install_signalhandler = 1;
@@ -521,7 +523,7 @@ static const char* gamepad_input_names[eGamepad_input_count] = {
 static const char* gamepad_action_names[eGamepad_action_count] = {
     "Accelerate", "Handbrake", "GearDown", "Horn", "Recovery", "Repair", "Cockpit", "Map", "Menu",
     "LookLeft", "LookForward", "LookRight", "HudAll", "HudInfo", "HudAvatar", "HudOther",
-    "MenuConfirm", "MenuBack"
+    "Recenter", "MenuConfirm", "MenuBack"
 };
 static const char* gamepad_axis_names[] = { "None", "LeftStickX", "RightStickX", "LT", "RT" };
 
@@ -533,8 +535,8 @@ static void Harness_SetGamepadBinding(tHarness_gamepad_action pAction, int pInpu
 static void Harness_DefaultGamepadConfig(void) {
     tHarness_gamepad_config* c = &harness_game_config.gamepad_config;
 
-    Harness_SetGamepadBinding(eGamepad_action_accelerate, eGamepad_button_a, -1);
-    Harness_SetGamepadBinding(eGamepad_action_handbrake, eGamepad_button_left_shoulder, -1);
+    Harness_SetGamepadBinding(eGamepad_action_accelerate, -1, -1);
+    Harness_SetGamepadBinding(eGamepad_action_handbrake, eGamepad_button_a, -1);
     Harness_SetGamepadBinding(eGamepad_action_gear_down, eGamepad_button_right_shoulder, -1);
     Harness_SetGamepadBinding(eGamepad_action_horn, eGamepad_button_left_stick, -1);
     Harness_SetGamepadBinding(eGamepad_action_recovery, eGamepad_button_y, -1);
@@ -549,6 +551,7 @@ static void Harness_DefaultGamepadConfig(void) {
     Harness_SetGamepadBinding(eGamepad_action_hud_info, eGamepad_button_dpad_up, -1);
     Harness_SetGamepadBinding(eGamepad_action_hud_avatar, eGamepad_button_dpad_left, -1);
     Harness_SetGamepadBinding(eGamepad_action_hud_other, eGamepad_button_dpad_right, -1);
+    Harness_SetGamepadBinding(eGamepad_action_recenter, eGamepad_button_left_shoulder, -1);
     Harness_SetGamepadBinding(eGamepad_action_menu_confirm, eGamepad_button_a, -1);
     Harness_SetGamepadBinding(eGamepad_action_menu_back, eGamepad_button_x, eGamepad_button_start);
     c->steer = eGamepad_axis_left_x;
@@ -694,6 +697,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.vr_hud_width = atof(value);
     } else if (MATCH("VR", "Blood")) {
         harness_game_config.vr_blood = (value[0] == '1');
+    } else if (MATCH("VR", "FarChase")) {
+        harness_game_config.vr_far_chase = atof(value);
     }
 
     else if (MATCH("Cheats", "EditMode")) {

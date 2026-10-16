@@ -15,6 +15,9 @@
 #include "harness/config.h"
 #include "harness/hooks.h"
 #include "harness/trace.h"
+#ifdef DETHRACE_VR
+#include "harness/vr.h"
+#endif
 #include "input.h"
 #include "pd/sys.h"
 
@@ -195,6 +198,12 @@ void PDGamepadSetKeyArray(int* pKeys, int pMark) {
         } else {
             GamepadMenuKeys(pKeys, pMark);
         }
+#ifdef DETHRACE_VR
+        // VR: recentring works in the race and in the menus
+        if (GamepadActionPressed(eGamepad_action_recenter)) {
+            VR_Recenter();
+        }
+#endif
     }
     // DEVRACE_GAMEPAD_DEBUG=1: log every change of the buttons and the keys they set
     if (gGamepad_debug < 0) {

@@ -63,6 +63,9 @@ static XrInstance instance = XR_NULL_HANDLE;
 static XrSystemId system_id = XR_NULL_SYSTEM_ID;
 static XrSession session = XR_NULL_HANDLE;
 static XrSpace space = XR_NULL_HANDLE;
+// Pose of the space's origin in the runtime's LOCAL space, moved by VR_Recenter
+static XrPosef space_origin = { .orientation = { .w = 1.0f } };
+static int recenter_requested;
 static XrSessionState session_state = XR_SESSION_STATE_UNKNOWN;
 static int session_running;
 
@@ -250,8 +253,53 @@ static int VR_CreateSession(void) {
 
     // Seated game: LOCAL space, origin at the head position when the session starts
     space_info.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
-    space_info.poseInReferenceSpace.orientation.w = 1.0f;
+    space_info.poseInReferenceSpace = space_origin;
     return VR_Check(xrCreateReferenceSpace(session, &space_info, &space), "xrCreateReferenceSpace");
+}
+
+void VR_Recenter(void) {
+    recenter_requested = 1;
+}
+
+// Moves the origin of the space to the head as located for the last frame: its position, and its
+// heading only, so that the horizon stays level
+static void VR_ApplyRecenter(void) {
+    XrReferenceSpaceCreateInfo space_info = { .type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO };
+    XrSpace new_space;
+    XrQuaternionf q;
+    XrVector3f head;
+    float origin_yaw;
+    float head_yaw;
+    float yaw;
+
+    recenter_requested = 0;
+    if (!views_valid) {
+        return;
+    }
+    // Head: between the eyes, in the current space
+    head.x = (views[0].pose.position.x + views[1].pose.position.x) / 2.0f;
+    head.y = (views[0].pose.position.y + views[1].pose.position.y) / 2.0f;
+    head.z = (views[0].pose.position.z + views[1].pose.position.z) / 2.0f;
+    q = views[0].pose.orientation;
+    head_yaw = atan2f(2.0f * (q.x * q.z + q.w * q.y), 1.0f - 2.0f * (q.x * q.x + q.y * q.y));
+    // The current origin's heading is a rotation about the vertical axis only
+    origin_yaw = 2.0f * atan2f(space_origin.orientation.y, space_origin.orientation.w);
+
+    // New origin in the runtime's LOCAL space: the head, seen from the current origin
+    space_info.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
+    space_info.poseInReferenceSpace.position.x = space_origin.position.x + head.x * cosf(origin_yaw) + head.z * sinf(origin_yaw);
+    space_info.poseInReferenceSpace.position.y = space_origin.position.y + head.y;
+    space_info.poseInReferenceSpace.position.z = space_origin.position.z - head.x * sinf(origin_yaw) + head.z * cosf(origin_yaw);
+    yaw = origin_yaw + head_yaw;
+    space_info.poseInReferenceSpace.orientation.y = sinf(yaw / 2.0f);
+    space_info.poseInReferenceSpace.orientation.w = cosf(yaw / 2.0f);
+    if (!VR_Check(xrCreateReferenceSpace(session, &space_info, &new_space), "xrCreateReferenceSpace (recenter)")) {
+        return;
+    }
+    xrDestroySpace(space);
+    space = new_space;
+    space_origin = space_info.poseInReferenceSpace;
+    LOG_INFO("View recentred");
 }
 
 static int64_t VR_ChooseSwapchainFormat(void) {
@@ -734,6 +782,9 @@ static void VR_BeginNextFrame(void) {
     }
     frame_begun = 1;
 
+    if (recenter_requested) {
+        VR_ApplyRecenter();
+    }
     views_valid = 0;
     if (frame_state.shouldRender) {
         locate_info.viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
