@@ -24,6 +24,9 @@
 #include "world.h"
 #include <stdlib.h>
 #include <string.h>
+#ifdef DETHRACE_VR
+#include "vrmenu.h"
+#endif
 
 // GLOBAL: CARM95 0x00519ad8
 int gKey_defns[18] = { 48, 49, 46, 47, 53, 44, 59, 57, 55, 45, 50, 51, 52, 56, 62, 63, 64, 66 };
@@ -1616,7 +1619,12 @@ void DoOptions(void) {
 
     PrintMemoryDump(0, "BEFORE ENTERING OPTIONS");
     PreloadBunchOfFlics(1);
+#ifdef DETHRACE_VR
+    // VR: the options screen gets a VR button that leads to the VR options
+    result = DoInterfaceScreen(VRMenu_OptionsSpec(&interface_spec), 0, gProgram_state.track_spec.the_actor ? 2 : 1);
+#else
     result = DoInterfaceScreen(&interface_spec, 0, gProgram_state.track_spec.the_actor ? 2 : 1);
+#endif
     switch (result) {
     case 0:
         DoSoundOptions();
@@ -1627,6 +1635,11 @@ void DoOptions(void) {
     case 2:
         DoControlOptions();
         break;
+#ifdef DETHRACE_VR
+    case VRMENU_OPTIONS_CHOICE:
+        VRMenu_DoOptions(&interface_spec);
+        break;
+#endif
     }
     UnlockBunchOfFlics(1);
     PrintMemoryDump(0, "AFTER ENTERING OPTIONS");
