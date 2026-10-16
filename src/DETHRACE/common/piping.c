@@ -529,7 +529,7 @@ void AddDataToSession(int pSubject_index, void* pData, tU32 pData_length) {
 
     if (gPipe_buffer_start != NULL && !gAction_replay_mode && gProgram_state.racing) {
         temp_buffer_size = pData_length + (gLocal_buffer_size + offsetof(tPipe_chunk, chunk_data));
-        if (temp_buffer_size < LOCAL_BUFFER_SIZE) {
+        if (temp_buffer_size < LOCAL_BUFFER_SIZE && ((tPipe_session*)gLocal_buffer)->number_of_chunks != 0xFF) {
 #ifdef DETHRACE_FIX_BUGS
             int amount = ((tPipe_session*)gLocal_buffer)->number_of_chunks;
             if (255 - amount < 3) {
