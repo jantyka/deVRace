@@ -1,6 +1,6 @@
 # deVRace
 
-A Linux VR-Port of dethrace. I always wanted to play my childhood game in VR so i vibecoded it, dont get mad, i primary did it for me and out of curiosity. A reason why this is Wayland only. Tested with Valve Index, cuz thats what i have.... If you want to contribute feel free to make a Windows or Android Fork, give me some feature requests or maybe find some bugs. This will be an ongoing project.
+A Linux VR-Port of dethrace. I always wanted to play my childhood game in VR so i vibecoded it, dont get mad, i primary did it for me and out of curiosity. A reason why this is Wayland only. Tested with valve index, cuz thats what i have.... If you want to contribute feel free to make a windows or android fork, give me some feature requests or maybe find some bugs. This will be an ongoing project.
 
 ---
 
