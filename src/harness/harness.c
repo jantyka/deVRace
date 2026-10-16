@@ -331,6 +331,8 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.vr_hud_width = 1.6f;
     // VR: blood on the lens on
     harness_game_config.vr_blood = 1;
+    // VR: graphics options at their best on each start
+    harness_game_config.vr_max_detail = 1;
     // VR: the view key cycles cockpit, chase and a far chase camera 1.8 times as far away
     harness_game_config.vr_far_chase = 1.8f;
 
@@ -697,6 +699,8 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.vr_hud_width = atof(value);
     } else if (MATCH("VR", "Blood")) {
         harness_game_config.vr_blood = (value[0] == '1');
+    } else if (MATCH("VR", "MaxDetail")) {
+        harness_game_config.vr_max_detail = (value[0] == '1');
     } else if (MATCH("VR", "FarChase")) {
         harness_game_config.vr_far_chase = atof(value);
     }

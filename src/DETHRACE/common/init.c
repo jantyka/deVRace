@@ -38,6 +38,9 @@
 #include "trig.h"
 #include "utility.h"
 #include "world.h"
+#ifdef DETHRACE_VR
+#include "brucetrk.h"
+#endif
 
 #include "brender.h"
 
@@ -592,6 +595,24 @@ void InitialiseApplication(int pArgc, char** pArgv) {
     strcpy(gProgram_state.player_name[0], "MAX DAMAGE");
     strcpy(gProgram_state.player_name[1], "DIE ANNA");
     RestoreOptions();
+#ifdef DETHRACE_VR
+    // VR: every graphics option at its best on each start ([VR] MaxDetail); the view distance only
+    // grows, a larger one than the options screen offers (set in the race) is kept
+    if (harness_game_config.vr_max_detail) {
+        SetCarSimplificationLevel(0);
+        SetCarTexturingLevel(eCTL_full);
+        SetShadowLevel(eShadow_everyone);
+        SetWallTexturingLevel(eWTL_full);
+        SetRoadTexturingLevel(eRTL_full);
+        SetYon(MAX(GetYon(), 35.f));
+        SetYonFactor(1.f);
+        SetSkyTextureOn(1);
+        SetDepthCueingOn(1);
+        SetAccessoryRendering(1);
+        SetSmokeOn(1);
+        SetSoundDetailLevel(2);
+    }
+#endif
     LoadKeyMapping();
     if (!PDInitScreenVars(pArgc, pArgv)) {
         FatalError(kFatalError_UnsupportedScreenDepth);

@@ -21,6 +21,7 @@ The original Dethrace README is in [docs/README.dethrace.md](docs/README.dethrac
 - **Far chase camera** as in other racing games: the view key cycles cockpit, chase and far chase view (`FarChase`).
 - **Recenter** the view with the gamepad (LB), in the race and in the menus.
 - **Blood on the lens** when you run over pedestrians at speed: drips run down the lens in the chase views (smaller and fewer in the far one); in the cockpit the airstream pushes it up the windscreen and to the outside of a turn. Moving the mouse too fast in the menus splatters some too.
+- **Graphics options at their best** on each start (`MaxDetail`).
 - **Cockpit view without the 2D dashboard**, showing the car's 3D bonnet. Cars whose data borrows another car's bonnet (most opponents use the Eagle's) show none instead of the wrong one.
 - **Smoke, sparks, shadows, culling and cockpit shake** are rendered per eye; the action replay is recorded only once.
 - **Native Wayland** client through SDL3 and EGL, using `XR_MNDX_egl_enable`. No X11/GLX.
@@ -139,6 +140,7 @@ HudInstruments = 1
 HudPowerups = 1
 HideBorrowedBonnet = 1 ; hide bonnets a car borrows from another car in the cockpit view
 Blood = 1          ; blood may splatter onto the lens when you run over pedestrians at over 70 km/h
+MaxDetail = 1      ; set every graphics option to its best on each start
 FarChase = 1.8     ; far chase camera: distance as a multiple of the normal one (0 = no far chase camera)
 
 [Gamepad]
