@@ -978,7 +978,11 @@ void MungePedestrianSequence(tPedestrian_data* pPedestrian, int pAction_changed)
                 // frame, cycling through two sequences with different flipped flags.
                 // Add a 1° dead zone at each zone's lower edge: only commit to the
                 // new sequence if we're clearly inside it, not just barely entered.
-                if (harness_game_config.fix_ped_spasm) {
+                // Never applies right after an action change: current_sequence then
+                // belongs to the old action, so skipping the assignment would leave
+                // it stuck showing a stale, unrelated pose (e.g. still standing after
+                // switching to the death action) instead of a same-action flicker.
+                if (harness_game_config.fix_ped_spasm && !pAction_changed) {
                     float lower_bound = (i > 0) ? the_action->sequences[i - 1].max_bearing : 0.f;
                     if (heading_difference - lower_bound < 1.f) {
                         break;
