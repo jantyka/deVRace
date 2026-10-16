@@ -752,14 +752,18 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
     return 1;
 }
 
+static void Harness_GetIniPath(char* pPath) {
+    if (OS_GetPrefPath(pPath, HARNESS_PREF_PATH_NAME)) {
+        strcpy(pPath, "./");
+    }
+    strcat(pPath, "dethrace.ini");
+}
+
 int Harness_ProcessIniFile(void) {
     int i;
     char path[1024];
 
-    if (OS_GetPrefPath(path, HARNESS_PREF_PATH_NAME)) {
-        strcpy(path, "./");
-    }
-    strcat(path, "dethrace.ini");
+    Harness_GetIniPath(path);
     LOG_INFO2("Loading ini file %s", path);
 
     if (ini_parse(path, Harness_Ini_Callback, NULL) < 0) {
@@ -783,6 +787,102 @@ int Harness_ProcessIniFile(void) {
         }
     }
 
+    return 0;
+}
+
+// Length of the key of an ini line ("  Name = value ; comment"), 0 if it has none. *pStart: where the
+// key starts.
+static size_t Harness_IniKey(const char* pLine, const char** pStart) {
+    const char* end;
+
+    while (*pLine == ' ' || *pLine == '\t') {
+        pLine++;
+    }
+    *pStart = pLine;
+    end = strchr(pLine, '=');
+    if (end == NULL || *pLine == ';' || *pLine == '#' || *pLine == '[') {
+        return 0;
+    }
+    while (end > pLine && (end[-1] == ' ' || end[-1] == '\t')) {
+        end--;
+    }
+    return end - pLine;
+}
+
+int Harness_SaveIniValue(const char* pSection, const char* pName, const char* pValue) {
+    char path[1024];
+    char temp_path[1040];
+    char line[1024];
+    char section[256] = "";
+    const char* key;
+    const char* comment;
+    size_t key_length;
+    FILE* in;
+    FILE* out;
+    int in_section = 0;
+    int written = 0;
+    int blank_lines = 0;
+    int column;
+
+    Harness_GetIniPath(path);
+    snprintf(temp_path, sizeof(temp_path), "%s.tmp", path);
+    out = OS_fopen(temp_path, "w");
+    if (out == NULL) {
+        LOG_WARN2("Cannot write %s", temp_path);
+        return 1;
+    }
+    in = OS_fopen(path, "r");
+    while (in != NULL && fgets(line, sizeof(line), in) != NULL) {
+        key_length = Harness_IniKey(line, &key);
+        // Blank lines at the end of the section stay behind an entry added there
+        if (*key == '\n' || *key == '\r' || *key == '\0') {
+            blank_lines++;
+            continue;
+        }
+        if (*key == '[') {
+            // Leaving the section without the entry: add it at its end
+            if (in_section && !written) {
+                fprintf(out, "%s = %s\n", pName, pValue);
+                written = 1;
+            }
+            sscanf(key + 1, "%255[^]]", section);
+            in_section = strcasecmp(section, pSection) == 0;
+        }
+        for (; blank_lines > 0; blank_lines--) {
+            fputc('\n', out);
+        }
+        if (in_section && !written && key_length == strlen(pName) && strncasecmp(key, pName, key_length) == 0) {
+            // Replace the value, keeping the indentation and a comment behind it in its column
+            comment = strpbrk(strchr(key, '=') + 1, ";#");
+            column = fprintf(out, "%.*s = %s", (int)(key + key_length - line), line, pValue);
+            if (comment != NULL) {
+                fprintf(out, "%*s%s", (int)(comment - line) - column > 1 ? (int)(comment - line) - column : 1, "", comment);
+            } else {
+                fputc('\n', out);
+            }
+            written = 1;
+            continue;
+        }
+        fputs(line, out);
+    }
+    if (!written) {
+        if (!in_section) {
+            fprintf(out, "\n[%s]\n", pSection);
+        }
+        fprintf(out, "%s = %s\n", pName, pValue);
+    }
+    for (; blank_lines > 0; blank_lines--) {
+        fputc('\n', out);
+    }
+    if (in != NULL) {
+        fclose(in);
+    }
+    if (fclose(out) != 0 || rename(temp_path, path) != 0) {
+        LOG_WARN2("Cannot write %s", path);
+        remove(temp_path);
+        return 1;
+    }
+    LOG_INFO("Saved [%s] %s = %s in %s", pSection, pName, pValue, path);
     return 0;
 }
 

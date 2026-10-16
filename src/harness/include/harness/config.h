@@ -165,4 +165,8 @@ typedef struct tHarness_game_config {
 extern tHarness_game_info harness_game_info;
 extern tHarness_game_config harness_game_config;
 
+// Writes one entry into dethrace.ini: replaces its value (keeping a comment behind it) or adds it to
+// the end of its section, which is added if missing. Returns 0 on success.
+int Harness_SaveIniValue(const char* pSection, const char* pName, const char* pValue);
+
 #endif
