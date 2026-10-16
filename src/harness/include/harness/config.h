@@ -163,6 +163,8 @@ typedef struct tHarness_game_config {
     // Pedestrian spasm fix
     // Round wheel models
     int round_wheels;
+    // Vastly extended draw distance
+    int extend_draw_distance;
     int fix_ped_spasm;
 } tHarness_game_config;
 

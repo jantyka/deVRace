@@ -38,9 +38,7 @@
 #include "trig.h"
 #include "utility.h"
 #include "world.h"
-#ifdef DETHRACE_VR
 #include "brucetrk.h"
-#endif
 
 #include "brender.h"
 
@@ -611,6 +609,16 @@ void InitialiseApplication(int pArgc, char** pArgv) {
         SetAccessoryRendering(1);
         SetSmokeOn(1);
         SetSoundDetailLevel(2);
+    }
+#endif
+#if defined(DETHRACE_FIX_BUGS)
+    // ExtendDrawDistance's Yon override otherwise only applies inside
+    // SetGraphicsOptions(), which only runs when the player exits the in-game
+    // Graphics Options screen. Apply it here too so a fresh profile (no saved
+    // OPTIONS.TXT yet) gets the extended distance without visiting Options first.
+    if (harness_game_config.extend_draw_distance) {
+        SetYon(1000.f);
+        SetYonFactor(1.f);
     }
 #endif
     LoadKeyMapping();

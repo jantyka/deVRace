@@ -272,7 +272,7 @@ tConcussion gConcussion;
 tClip_details gShadow_clip_planes[8];
 
 // GLOBAL: CARM95 0x0053e5f8
-br_actor* gLollipops[100];
+br_actor* gLollipops[1500];
 
 // GLOBAL: CARM95 0x0053f8d8
 tWobble_spec gWobble_array[5];
