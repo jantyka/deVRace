@@ -15,6 +15,7 @@
 #include "globvrbm.h"
 #include "globvrpb.h"
 #include "graphics.h"
+#include "harness/config.h"
 #include "harness/trace.h"
 #include "input.h"
 #include "loading.h"
@@ -1576,6 +1577,15 @@ void AddGroovidelics(FILE* pF, int pOwner, br_actor* pParent_actor, int pRef_off
         }
         the_groove->lollipop_mode = GetALineAndInterpretCommand(pF, gLollipop_names, COUNT_OF(gLollipop_names));
         the_groove->mode = GetALineAndInterpretCommand(pF, gGroove_nature_names, COUNT_OF(gGroove_nature_names));
+#ifdef DETHRACE_FIX_BUGS
+        // Car groovidelics (owner >= 0) use eGroove_mode_constant from their .FNK files,
+        // which makes GrooveThisDelic cull the animation if the actor is more than ~6 BRU
+        // from the camera. Wheel spin, steering and suspension all freeze at that distance.
+        // Force distance mode so the full yon distance is used as the culling threshold.
+        if (pOwner >= 0 && (harness_game_config.opponent_max_detail || harness_game_config.extend_draw_distance)) {
+            the_groove->mode = eGroove_mode_distance;
+        }
+#endif
 
         the_groove->path_type = GetALineAndInterpretCommand(pF, gGroove_path_names, COUNT_OF(gGroove_path_names));
         the_groove->path_interrupt_status = eInterrupt_none;
@@ -3107,6 +3117,10 @@ void LoadTrack(char* pFile_name, tTrack_spec* pTrack_spec, tRace_info* pRace_inf
         gYon_multiplier = GetAScalar(f);
     } else {
         gYon_multiplier = 1.0;
+    }
+    // OpponentMaxDetail: 10 times the view distance (ExtendDrawDistance has a far larger one)
+    if (harness_game_config.opponent_max_detail && !harness_game_config.extend_draw_distance) {
+        gYon_multiplier *= 10.f;
     }
     GetAString(f, s);
     if (strcmp(s, pFile_name) != 0) {

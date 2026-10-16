@@ -4654,6 +4654,10 @@ void MungeCarGraphics(tU32 pFrame_period) {
             if (gNet_mode != eNet_mode_none && CAR_IS_IT_OR_FOX(the_car)) {
                 distance_from_camera = 0.f;
             }
+            // OpponentMaxDetail: never the simplified models
+            if (harness_game_config.opponent_max_detail) {
+                distance_from_camera = 0.f;
+            }
 #ifdef DETHRACE_FIX_BUGS
 #undef CAR_IS_IT_OR_FOX
 #endif

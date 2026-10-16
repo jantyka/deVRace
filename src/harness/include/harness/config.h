@@ -165,6 +165,8 @@ typedef struct tHarness_game_config {
     int round_wheels;
     // Vastly extended draw distance
     int extend_draw_distance;
+    // Opponent cars always at full detail, with 10 times the view distance
+    int opponent_max_detail;
     int fix_ped_spasm;
 } tHarness_game_config;
 
