@@ -5,6 +5,7 @@
 #include "include/harness/config.h"
 #include "include/harness/hooks.h"
 #include "include/harness/os.h"
+#include "include/harness/postfx.h"
 #include "ini.h"
 #include "version.h"
 #ifdef DETHRACE_VR
@@ -303,6 +304,9 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.extend_draw_distance = 0;
     // Opponent cars always at full detail, 10 times the view distance ([Slop] OpponentMaxDetail)
     harness_game_config.opponent_max_detail = 0;
+    // No post effect; sharpen once it is switched on ([Graphics] Shader, PostEffect)
+    harness_game_config.post_shader = 0;
+    harness_game_config.post_effect = eHarness_post_effect_sharpen;
     // limit to 60 fps by default
     harness_game_config.fps = 60;
     // do not freeze timer
@@ -753,6 +757,17 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
         harness_game_config.round_wheels = (value[0] == '1');
     } else if (MATCH("Slop", "FixPedSpasm")) {
         harness_game_config.fix_ped_spasm = (value[0] == '1');
+    }
+
+    else if (MATCH("Graphics", "Shader")) {
+        harness_game_config.post_shader = (value[0] == '1');
+    } else if (MATCH("Graphics", "PostEffect")) {
+        i = Harness_PostEffectFromName(value);
+        if (i < 0) {
+            LOG_WARN3("Unknown [Graphics] PostEffect %s, using %s", value, Harness_PostEffectName(eHarness_post_effect_sharpen));
+            i = eHarness_post_effect_sharpen;
+        }
+        harness_game_config.post_effect = i;
     }
 
     else if (MATCH("Developers", "Diagnostics")) {

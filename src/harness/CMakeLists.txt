@@ -56,6 +56,43 @@ target_sources(harness PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/version.h"
 )
 
+# Post effects on the 3D image (OpenGL renderer; not in the build matching the original executable)
+if(NOT MSVC_42_FOR_RECCMP)
+    set(POSTFX_SHADERS
+        postfx.vert.glsl
+        common.frag.glsl
+        sharpen.frag.glsl
+        vivid.frag.glsl
+        junkyard.frag.glsl
+        voodoo.frag.glsl
+        comic.frag.glsl
+        crt.frag.glsl
+        glow_extract.frag.glsl
+        glow_blur.frag.glsl
+        glow_combine.frag.glsl
+    )
+    set(POSTFX_EMBEDDED)
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/postfx")
+    foreach(shader ${POSTFX_SHADERS})
+        add_custom_command(
+            OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/postfx/${shader}.h"
+            COMMAND "${CMAKE_COMMAND}" "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/postfx/shaders" "-DFILE=${shader}" -P "${CMAKE_SOURCE_DIR}/cmake/EmbedResource.cmake"
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/postfx"
+            DEPENDS "postfx/shaders/${shader}"
+        )
+        list(APPEND POSTFX_EMBEDDED "${CMAKE_CURRENT_BINARY_DIR}/postfx/${shader}.h")
+    endforeach()
+    target_sources(harness PRIVATE
+        include/harness/postfx.h
+        postfx/postfx.c
+        postfx/postfx.h
+        ${POSTFX_EMBEDDED}
+    )
+    target_include_directories(harness PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/postfx")
+    # glad: the GL functions are loaded by glrend, the post effects use the same function pointers
+    target_link_libraries(harness PRIVATE BRender::Drivers::GLRend)
+endif()
+
 if(DETHRACE_VR)
     if(NOT UNIX OR APPLE)
         message(FATAL_ERROR "DETHRACE_VR is currently only supported on Linux")

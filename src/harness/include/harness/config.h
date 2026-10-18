@@ -168,6 +168,10 @@ typedef struct tHarness_game_config {
     // Opponent cars always at full detail, with 10 times the view distance
     int opponent_max_detail;
     int fix_ped_spasm;
+    // Post effect on the 3D image: on/off and which one ([Graphics] Shader and PostEffect, see
+    // harness/postfx.h)
+    int post_shader;
+    int post_effect;
 } tHarness_game_config;
 
 extern tHarness_game_info harness_game_info;

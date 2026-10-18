@@ -16,6 +16,9 @@
 #include "harness/hooks.h"
 #include "harness/os.h"
 #include "harness/trace.h"
+#ifdef DETHRACE_3DFX_PATCH
+#include "harness/postfx.h"
+#endif
 #ifdef DETHRACE_VR
 #include "harness/config.h"
 #include "harness/vr.h"
@@ -2364,6 +2367,10 @@ void RenderAFrame(int pDepth_mask_on) {
         RenderProximityRays(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, gFrame_period);
         BrZbSceneRenderEnd();
     }
+#ifdef DETHRACE_3DFX_PATCH
+    // Post effect ([Graphics] Shader) on the finished 3D image, before the 2D elements
+    Harness_PostEffectScene(gCamera);
+#endif
 #ifdef DETHRACE_VR
     // VR: same scene once per eye, before the camera matrix is restored below
     VR_RenderEyePasses(&old_camera_matrix);
