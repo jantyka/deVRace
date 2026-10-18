@@ -23,7 +23,8 @@ The original Dethrace README is in [docs/README.dethrace.md](docs/README.dethrac
 - **Blood on the lens** when you run over pedestrians at speed: drips run down the lens in the chase views (smaller and fewer in the far one); in the cockpit the airstream pushes it up the windscreen and to the outside of a turn. Moving the mouse too fast in the menus splatters some too.
 - **Rear view mirror** in the cockpit view, as a rectangle right below the race timer (`Mirror`).
 - **Graphics options at their best** on each start (`MaxDetail`).
-- **VR options** in the game's options screen (VR button): switch the blood on the lens and the options from the slop pack (below) on and off; saved to `dethrace.ini`.
+- **VR options** in the game's options screen (VR button): switch the blood on the lens, the options from the slop pack (below) and the post effects (below) on and off, and pick the effect; saved to `dethrace.ini`.
+- **Post effects** on the 3D image of each eye, one at a time: `SHARPEN` (contrast adaptive), `VIVID`, `JUNKYARD`, `GLOW` (bloom), `VOODOO` (16-bit colours with dither, like a 3dfx card), `COMIC` (outlines, flat colours) and `CRT` (monitor only). The HUD, mirror and blood are drawn on top, untouched. Off by default; switched in the VR options (`SHADER`, `EFFECT`) or in `[Graphics]`.
 - **Cockpit view without the 2D dashboard** and without the driver's hands, showing the car's 3D bonnet. Cars whose data borrows another car's bonnet (most opponents use the Eagle's) show none instead of the wrong one.
 - **Smoke, sparks, shadows, culling and cockpit shake** are rendered per eye; the action replay is recorded only once.
 - **Electro-bastard ray** drawn in the OpenGL mode, where it was missing (Dethrace pull request [#1131](https://github.com/dethrace-labs/dethrace/pull/1131) by Link4Electronics), with the same zigzag for both eyes.
@@ -142,6 +143,10 @@ Gamepad = 1        ; use a connected gamepad
 [Developers]
 FrameStats = 0     ; log frame timing every N seconds (0 = off)
 
+[Graphics]
+Shader = 0         ; post effect on the 3D image (1 = on)
+PostEffect = sharpen ; sharpen, vivid, junkyard, glow, voodoo, comic or crt (crt only on the monitor)
+
 [VR]
 HudDistance = 1.8  ; HUD/menu panel: distance in metres
 HudWidth = 1.6     ; HUD/menu panel: width in metres
@@ -198,7 +203,7 @@ RumblePedestrian = 0.35
 RumbleCar = 1.0
 ```
 
-Environment variables for debugging: `DEVRACE_VR_DEBUG=1` (per-eye diagnostics), `DEVRACE_VR_DUMP_FRAMES=<dir>` (eye images as PPM), `DEVRACE_GAMEPAD_DEBUG=1` (gamepad buttons). To test without a headset, point `XR_RUNTIME_JSON` to Monado's runtime manifest and run Monado with its simulated (Qwerty) headset.
+Environment variables for debugging: `DEVRACE_VR_DEBUG=1` (per-eye diagnostics), `DEVRACE_VR_DUMP_FRAMES=<dir>` (eye images as PPM), `DEVRACE_GAMEPAD_DEBUG=1` (gamepad buttons), `DEVRACE_SHADER_DIR=<dir>` (load the post effect shaders from there and reload them when they change), `DEVRACE_POSTFX_TIMING=1` (GPU time of the post effects). To test without a headset, point `XR_RUNTIME_JSON` to Monado's runtime manifest and run Monado with its simulated (Qwerty) headset.
 
 ## Known issues
 
