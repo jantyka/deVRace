@@ -6,7 +6,8 @@
 // original buttons and matched to the palette of the screen. Behind it, the VR options screen uses
 // the options screen's frame with a dark panel of its own over the buttons, and a DONE button drawn
 // over the frame's CANCEL button. Each option is a row switched on and off by confirming it; the
-// change is saved to dethrace.ini.
+// change is saved to dethrace.ini. The EFFECT row below SHADER is only there while SHADER is on;
+// confirming it or left/right go through the post effects (harness/postfx.h).
 
 #include "vrmenu.h"
 
@@ -18,6 +19,7 @@
 #include "grafdata.h"
 #include "graphics.h"
 #include "harness/config.h"
+#include "harness/postfx.h"
 #include "harness/trace.h"
 #include "intrface.h"
 #include "sound.h"
@@ -29,11 +31,12 @@ static const tRectile gVR_button_rect = { { 12, 25 }, { 125, 300 }, { 52, 105 },
 static const tRectile gVR_panel_rect = { { 50, 100 }, { 33, 80 }, { 280, 560 }, { 150, 360 } };
 static const tRectile gVR_done_rect = { { 57, 114 }, { 154, 370 }, { 123, 246 }, { 175, 420 } };
 // Rows of the VR options: the first one, the others below it at this distance
-static const tRectile gVR_row_rect = { { 58, 116 }, { 52, 124 }, { 272, 544 }, { 67, 160 } };
-static const int gVR_row_step[2] = { 17, 42 };
+static const tRectile gVR_row_rect = { { 58, 116 }, { 50, 120 }, { 272, 544 }, { 63, 151 } };
+static const int gVR_row_step[2] = { 14, 34 };
 
 // The VR options: label, value, its entry in dethrace.ini and what changes at once when it is
-// switched (NULL: from the next race on, or nothing beyond the value)
+// switched (NULL: from the next race on, or nothing beyond the value). is_effect: the post effect
+// row, a choice of effects instead of on and off.
 static void VRMenu_ApplyDrawDistance(void);
 static const struct {
     char* label;
@@ -41,18 +44,22 @@ static const struct {
     const char* section;
     const char* name;
     void (*apply)(void);
+    int is_effect;
 } gVR_options[] = {
     { "CAMERA BLOOD EFFECT", &harness_game_config.vr_blood, "VR", "Blood", NULL },
     { "VASTLY EXTENDED DRAW DISTANCE", &harness_game_config.extend_draw_distance, "Slop", "ExtendDrawDistance", VRMenu_ApplyDrawDistance },
     { "OPPONENT CAR LEVEL OF DETAIL ALWAYS MAX", &harness_game_config.opponent_max_detail, "Slop", "OpponentMaxDetail", NULL },
     { "WHEEL MODEL ROUNDING", &harness_game_config.round_wheels, "Slop", "RoundWheels", NULL },
     { "PEDESTRIAN SPASM FIX", &harness_game_config.fix_ped_spasm, "Slop", "FixPedSpasm", NULL },
+    { "SHADER", &harness_game_config.post_shader, "Graphics", "Shader", NULL },
+    { "EFFECT", &harness_game_config.post_effect, "Graphics", "PostEffect", NULL, 1 },
 };
 
 // VR options screen: the options are choices 0 to n-1, DONE (also escape) comes last
 #define VRMENU_CHOICE_DONE ((int)BR_ASIZE(gVR_options))
 
 static tInterface_spec gVR_options_spec;
+static tMouse_area gVR_vr_options_mouse_areas[BR_ASIZE(gVR_options) + 1];
 static tMouse_area gVR_options_mouse_areas[5];
 static tRectile gVR_options_recopy_areas[1];
 static int gVR_last_options_choice;
@@ -275,6 +282,27 @@ static void VRMenu_RowRect(int pIndex, tRectile* pRect) {
     }
 }
 
+// The effect row is only shown while the shader is on
+static int VRMenu_RowShown(int pIndex) {
+    return !gVR_options[pIndex].is_effect || harness_game_config.post_shader;
+}
+
+// Next post effect in pDirection (1 or -1) that can be shown now
+static void VRMenu_CycleEffect(int pIndex, int pDirection) {
+    int effect = *gVR_options[pIndex].value;
+    int i;
+
+    for (i = 0; i < eHarness_post_effect_count; i++) {
+        effect = (effect + pDirection + eHarness_post_effect_count) % eHarness_post_effect_count;
+        if (Harness_PostEffectAllowed(effect)) {
+            break;
+        }
+    }
+    *gVR_options[pIndex].value = effect;
+    Harness_SaveIniValue(gVR_options[pIndex].section, gVR_options[pIndex].name, Harness_PostEffectName(effect));
+    DRS3StartSound(gEffects_outlet, 3000);
+}
+
 static void VRMenu_DrawVROptions(int pCurrent_choice, int pCurrent_mode) {
     const tRectile* panel = &gVR_panel_rect;
     tRectile row;
@@ -293,8 +321,21 @@ static void VRMenu_DrawVROptions(int pCurrent_choice, int pCurrent_mode) {
         title_font, "VR OPTIONS", gBack_screen->width);
 
     for (i = 0; i < (int)BR_ASIZE(gVR_options); i++) {
+        // Hidden rows take no mouse clicks either
+        gVR_vr_options_mouse_areas[i].new_choice = VRMenu_RowShown(i) ? i : -1;
+        gVR_vr_options_mouse_areas[i].new_mode = VRMenu_RowShown(i) ? 0 : -1;
+        if (!VRMenu_RowShown(i)) {
+            continue;
+        }
         VRMenu_RowRect(i, &row);
-        value = *gVR_options[i].value ? "ON" : "OFF";
+        if (gVR_options[i].is_effect) {
+            value = (char*)Harness_PostEffectLabel(*gVR_options[i].value);
+            if (!Harness_PostEffectAllowed(*gVR_options[i].value)) {
+                value = "MONITOR ONLY";
+            }
+        } else {
+            value = *gVR_options[i].value ? "ON" : "OFF";
+        }
         // A label too long for the button font gets the small grey one
         label_font = font;
         if (DRTextWidth(font, gVR_options[i].label) + DRTextWidth(font, "OFF") + 24 * unit > RECT_WIDTH(&row)) {
@@ -324,6 +365,10 @@ static void VRMenu_ApplyDrawDistance(void) {
 static int VRMenu_VROptionsGoAhead(int* pCurrent_choice, int* pCurrent_mode) {
     char value[2];
 
+    if (*pCurrent_choice >= 0 && *pCurrent_choice < (int)BR_ASIZE(gVR_options) && gVR_options[*pCurrent_choice].is_effect) {
+        VRMenu_CycleEffect(*pCurrent_choice, 1);
+        return 0;
+    }
     if (*pCurrent_choice >= 0 && *pCurrent_choice < (int)BR_ASIZE(gVR_options)) {
         *gVR_options[*pCurrent_choice].value = !*gVR_options[*pCurrent_choice].value;
         if (gVR_options[*pCurrent_choice].apply != NULL) {
@@ -337,8 +382,38 @@ static int VRMenu_VROptionsGoAhead(int* pCurrent_choice, int* pCurrent_mode) {
     return 1;
 }
 
+// Up and down skip a hidden row
+static int VRMenu_VROptionsUp(int* pCurrent_choice, int* pCurrent_mode) {
+    if (*pCurrent_choice >= 0 && *pCurrent_choice < (int)BR_ASIZE(gVR_options) && !VRMenu_RowShown(*pCurrent_choice)) {
+        (*pCurrent_choice)--;
+    }
+    return 0;
+}
+
+static int VRMenu_VROptionsDown(int* pCurrent_choice, int* pCurrent_mode) {
+    if (*pCurrent_choice >= 0 && *pCurrent_choice < (int)BR_ASIZE(gVR_options) && !VRMenu_RowShown(*pCurrent_choice)) {
+        (*pCurrent_choice)++;
+    }
+    return 0;
+}
+
+// Left and right go through the effects on the effect row
+static int VRMenu_VROptionsLeft(int* pCurrent_choice, int* pCurrent_mode) {
+    if (*pCurrent_choice >= 0 && *pCurrent_choice < (int)BR_ASIZE(gVR_options) && gVR_options[*pCurrent_choice].is_effect) {
+        VRMenu_CycleEffect(*pCurrent_choice, -1);
+    }
+    return 0;
+}
+
+static int VRMenu_VROptionsRight(int* pCurrent_choice, int* pCurrent_mode) {
+    if (*pCurrent_choice >= 0 && *pCurrent_choice < (int)BR_ASIZE(gVR_options) && gVR_options[*pCurrent_choice].is_effect) {
+        VRMenu_CycleEffect(*pCurrent_choice, 1);
+    }
+    return 0;
+}
+
 void VRMenu_DoOptions(const tInterface_spec* pOptions_spec) {
-    static tMouse_area mouse_areas[BR_ASIZE(gVR_options) + 1];
+    tMouse_area* mouse_areas = gVR_vr_options_mouse_areas;
     tInterface_spec spec;
     tRectile row;
     int i;
@@ -365,19 +440,19 @@ void VRMenu_DoOptions(const tInterface_spec* pOptions_spec) {
     spec.initial_imode = 0;
     for (i = 0; i < 2; i++) {
         spec.move_left_delta[i] = 0;
-        spec.move_left_proc[i] = NULL;
+        spec.move_left_proc[i] = VRMenu_VROptionsLeft;
         spec.move_right_delta[i] = 0;
-        spec.move_right_proc[i] = NULL;
+        spec.move_right_proc[i] = VRMenu_VROptionsRight;
         spec.move_up_new_mode[i] = -1;
         spec.move_up_delta[i] = -1;
         spec.move_up_min[i] = 0;
         spec.move_up_max[i] = VRMENU_CHOICE_DONE;
-        spec.move_up_proc[i] = NULL;
+        spec.move_up_proc[i] = VRMenu_VROptionsUp;
         spec.move_down_new_mode[i] = -1;
         spec.move_down_delta[i] = 1;
         spec.move_down_min[i] = 0;
         spec.move_down_max[i] = VRMENU_CHOICE_DONE;
-        spec.move_down_proc[i] = NULL;
+        spec.move_down_proc[i] = VRMenu_VROptionsDown;
         spec.go_ahead_allowed[i] = 1;
         spec.go_ahead_proc[i] = VRMenu_VROptionsGoAhead;
         spec.escape_allowed[i] = 1;
@@ -393,7 +468,7 @@ void VRMenu_DoOptions(const tInterface_spec* pOptions_spec) {
     spec.flicker_on_flics = NULL;
     spec.flicker_off_flics = NULL;
     spec.pushed_flics = NULL;
-    spec.number_of_mouse_areas = (int)BR_ASIZE(mouse_areas);
+    spec.number_of_mouse_areas = (int)BR_ASIZE(gVR_vr_options_mouse_areas);
     spec.mouse_areas = mouse_areas;
     spec.number_of_recopy_areas = 0;
     spec.recopy_areas = NULL;
