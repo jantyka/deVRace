@@ -12,6 +12,7 @@
 // VR_DUMP_MAX_FRAMES times. Frames without game images (menus) are not counted.
 
 #include "vr.h"
+#include "../postfx/postfx.h"
 #include "vr_blood.h"
 #include "vr_gfx.h"
 
@@ -53,6 +54,7 @@ typedef struct tVR_eye_target {
     br_pixelmap* colour;
     br_pixelmap* depth;
     GLuint texture;
+    GLuint depth_texture;
     int rendered;
 } tVR_eye_target;
 
@@ -453,6 +455,7 @@ static int VR_Start(void) {
     if (dump_dir != NULL) {
         LOG_INFO("Writing eye images to %s every %d frames", dump_dir, dump_interval);
     }
+    PostFX_SetVR(1);
     return 1;
 }
 
@@ -585,14 +588,17 @@ static int VR_EndSwapchainImage(tVR_eye_swapchain* pSwapchain, const tVR_gl_stat
 }
 
 // Copies a texture of the swapchain's size into its next image (pTexture 0: clears it to black).
+// pEffect: post effect to draw it with (pDepth_texture: its depth buffer), -1 for a plain copy.
 // pDump_name: written as PPM when dumping is due, NULL for never.
-static int VR_CopyToSwapchain(tVR_eye_swapchain* pSwapchain, GLuint pTexture, const char* pDump_name) {
+static int VR_CopyToSwapchain(tVR_eye_swapchain* pSwapchain, GLuint pTexture, int pEffect, GLuint pDepth_texture, const char* pDump_name) {
     tVR_gl_state state;
 
     if (!VR_BeginSwapchainImage(pSwapchain, &state)) {
         return 0;
     }
-    if (pTexture != 0) {
+    if (pTexture != 0 && pEffect >= 0 && PostFX_Apply(pEffect, pTexture, pDepth_texture, pSwapchain->width, pSwapchain->height, 0, 0)) {
+        // drawn with the effect
+    } else if (pTexture != 0) {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, eye_read_framebuffer);
         glFramebufferTexture2D(GL_READ_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pTexture, 0);
         glBlitFramebuffer(0, 0, pSwapchain->width, pSwapchain->height, 0, 0, pSwapchain->width, pSwapchain->height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
@@ -613,7 +619,7 @@ static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view)
     tVR_eye_swapchain* eye = &eye_swapchains[pEye];
     tVR_eye_target* target = &eye_targets[pEye];
 
-    if (!VR_CopyToSwapchain(eye, target->rendered ? target->texture : 0, target->rendered ? (pEye == 0 ? "left" : "right") : NULL)) {
+    if (!VR_CopyToSwapchain(eye, target->rendered ? target->texture : 0, PostFX_Current(), target->depth_texture, target->rendered ? (pEye == 0 ? "left" : "right") : NULL)) {
         return 0;
     }
     pLayer_view->type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
@@ -632,7 +638,7 @@ static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view)
 // HUD quad in front of the player, in the space of the eyes (relative to the head position when the
 // session started). Transparent where the game drew no 2D overlay this frame.
 static int VR_RenderHud(XrCompositionLayerQuad* pLayer) {
-    if (hud_target == NULL || !VR_CopyToSwapchain(&hud_swapchain, hud_texture, "hud")) {
+    if (hud_target == NULL || !VR_CopyToSwapchain(&hud_swapchain, hud_texture, -1, 0, "hud")) {
         return 0;
     }
     pLayer->type = XR_TYPE_COMPOSITION_LAYER_QUAD;
@@ -663,7 +669,7 @@ static int VR_RenderMirror(XrCompositionLayerQuad* pLayer) {
     float hud_width;
     float hud_height;
 
-    if (!VR_CopyToSwapchain(&mirror_swapchain, mirror_texture, "mirror")) {
+    if (!VR_CopyToSwapchain(&mirror_swapchain, mirror_texture, -1, 0, "mirror")) {
         return 0;
     }
     hud_width = harness_game_config.vr_hud_width;
@@ -948,6 +954,10 @@ int VR_BeginEye(int pEye, br_pixelmap* pScreen, br_pixelmap** pColour, br_pixelm
             LOG_WARN("Cannot create the depth buffer or texture for eye %d", pEye);
             return 0;
         }
+        // Depth as a texture for post effects that need it (comic outlines)
+        if (BrPixelmapQuery(target->depth, &target->depth_texture, BRT_OPENGL_TEXTURE_U32) != BRE_OK) {
+            target->depth_texture = 0;
+        }
         LOG_INFO("Render target for eye %d: %dx%d, texture %u", pEye, target->colour->width, target->colour->height, target->texture);
     }
     if (target->depth == NULL || target->texture == 0) {
@@ -1098,4 +1108,5 @@ void VR_Shutdown(void) {
     hud_texture = 0;
     // The render targets belong to the GL context, which may already be gone; only forget them
     memset(eye_targets, 0, sizeof(eye_targets));
+    PostFX_SetVR(0);
 }
