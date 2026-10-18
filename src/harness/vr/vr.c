@@ -275,7 +275,29 @@ static int VR_CreateSession(void) {
 }
 
 void VR_Recenter(void) {
+    LOG_INFO("Recentring requested");
     recenter_requested = 1;
+}
+
+// The runtime moved its LOCAL space (recentred from SteamVR's menu): drop our own offset, or it would
+// be applied on top of the new centre
+static void VR_ResetRecenter(void) {
+    XrReferenceSpaceCreateInfo space_info = { .type = XR_TYPE_REFERENCE_SPACE_CREATE_INFO };
+    XrPosef identity = { .orientation = { .w = 1.0f } };
+    XrSpace new_space;
+
+    LOG_INFO("The runtime recentred the view");
+    if (memcmp(&space_origin, &identity, sizeof(identity)) == 0) {
+        return;
+    }
+    space_info.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
+    space_info.poseInReferenceSpace = identity;
+    if (!VR_Check(xrCreateReferenceSpace(session, &space_info, &new_space), "xrCreateReferenceSpace (runtime recenter)")) {
+        return;
+    }
+    xrDestroySpace(space);
+    space = new_space;
+    space_origin = identity;
 }
 
 // Moves the origin of the space to the head as located for the last frame: its position, and its
@@ -291,6 +313,7 @@ static void VR_ApplyRecenter(void) {
 
     recenter_requested = 0;
     if (!views_valid) {
+        LOG_INFO("Cannot recentre: no head pose this frame");
         return;
     }
     // Head: between the eyes, in the current space
@@ -497,6 +520,11 @@ static void VR_PollEvents(void) {
         switch (event.type) {
         case XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED:
             VR_HandleSessionState(((XrEventDataSessionStateChanged*)&event)->state);
+            break;
+        case XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING:
+            if (((XrEventDataReferenceSpaceChangePending*)&event)->referenceSpaceType == XR_REFERENCE_SPACE_TYPE_LOCAL) {
+                VR_ResetRecenter();
+            }
             break;
         case XR_TYPE_EVENT_DATA_INSTANCE_LOSS_PENDING:
             LOG_WARN2("%s", "OpenXR instance lost, continuing without VR");
