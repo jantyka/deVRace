@@ -19,7 +19,7 @@ The original Dethrace README is in [docs/README.dethrace.md](docs/README.dethrac
 - **Sky fixed to the world**: the original sky strip is rebuilt as a cylinder around you, so it stays put when you look around.
 - **Menus and HUD on a panel** in front of you (OpenXR quad layer). In the race the HUD floats over the 3D view; every HUD element can be switched on and off.
 - **Far chase camera** as in other racing games: the view key cycles cockpit, chase and far chase view (`FarChase`).
-- **Recenter** the view with the gamepad (LB), in the race and in the menus.
+- **Recenter** the view with the gamepad (right stick press), in the race and in the menus, or from SteamVR's menu.
 - **Blood on the lens** when you run over pedestrians at speed: drips run down the lens in the chase views (smaller and fewer in the far one); in the cockpit the airstream pushes it up the windscreen and to the outside of a turn. Moving the mouse too fast in the menus splatters some too.
 - **Rear view mirror** in the cockpit view, as a rectangle right below the race timer (`Mirror`).
 - **Graphics options at their best** on each start (`MaxDetail`).
@@ -44,9 +44,9 @@ Default layout (Xbox names), changeable in `[Gamepad]`:
 | X (hold) | Repair | Back |
 | Y | Recovery | |
 | B | Map | |
-| LB | VR: recenter the view | VR: recenter the view |
 | RB | Gear down | |
 | Left stick press | Horn | |
+| Right stick press | VR: recenter the view | VR: recenter the view |
 | View (Back) | Cockpit / chase / far chase view | |
 | Start | Menu | Back |
 | Right stick left / up / right | Look left / forward / right | |
@@ -185,7 +185,7 @@ HudAll = DpadDown
 HudInfo = DpadUp
 HudAvatar = DpadLeft
 HudOther = DpadRight
-Recenter = LB
+Recenter = RightStick
 MenuConfirm = A
 MenuBack = X, Start
 ; analog axes: LeftStickX RightStickX LT RT None
@@ -205,7 +205,7 @@ Environment variables for debugging: `DEVRACE_VR_DEBUG=1` (per-eye diagnostics),
 - The first SteamVR start after connecting the Index may hang for some seconds and restart its compositor; a second start works ([SteamVR-for-Linux#948](https://github.com/ValveSoftware/SteamVR-for-Linux/issues/948)).
 - Car shadows are not drawn in the 3dfx mode (also not on the monitor).
 - Loading screens pause the headset image briefly.
-- The view is centred where your head is when the game starts; to recenter it there is only the gamepad (LB), no key.
+- The view is centred where your head is when the game starts; to recenter it there is the gamepad (right stick press) or SteamVR's own recentring, no key.
 - No 2D dashboard in VR.
 
 ## Things planned

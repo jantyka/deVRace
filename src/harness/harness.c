@@ -571,7 +571,7 @@ static void Harness_DefaultGamepadConfig(void) {
     Harness_SetGamepadBinding(eGamepad_action_hud_info, eGamepad_button_dpad_up, -1);
     Harness_SetGamepadBinding(eGamepad_action_hud_avatar, eGamepad_button_dpad_left, -1);
     Harness_SetGamepadBinding(eGamepad_action_hud_other, eGamepad_button_dpad_right, -1);
-    Harness_SetGamepadBinding(eGamepad_action_recenter, eGamepad_button_left_shoulder, -1);
+    Harness_SetGamepadBinding(eGamepad_action_recenter, eGamepad_button_right_stick, -1);
     Harness_SetGamepadBinding(eGamepad_action_menu_confirm, eGamepad_button_a, -1);
     Harness_SetGamepadBinding(eGamepad_action_menu_back, eGamepad_button_x, eGamepad_button_start);
     c->steer = eGamepad_axis_left_x;
