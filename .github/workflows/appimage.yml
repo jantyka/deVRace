@@ -10,6 +10,11 @@ name: AppImage
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version for the program and the file name (e.g. v0.2.0-alpha); empty = git describe"
+        required: false
+        default: ""
 
 env:
   SDL3_TAG: release-3.4.18
@@ -60,7 +65,11 @@ jobs:
           cmake --install "$RUNNER_TEMP/openxr-build"
 
       - name: Build
+        env:
+          VERSION_INPUT: ${{ inputs.version }}
         run: |
+          # CMake takes the version from a VERSION file if there is one, else from git describe.
+          if [ -n "$VERSION_INPUT" ]; then echo "$VERSION_INPUT" > VERSION; fi
           cmake -B build-vr -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/deps" \
             -DDETHRACE_PLATFORM_SDL2=OFF -DDETHRACE_PLATFORM_SDL3=ON -DDETHRACE_VR=ON
@@ -94,7 +103,7 @@ jobs:
           # The C++ runtime comes from the system: the OpenXR runtime (e.g. SteamVR's) is loaded
           # into the game and may need a newer libstdc++ than the one from Ubuntu 22.04.
           rm -f AppDir/usr/lib/libstdc++.so* AppDir/usr/lib/libgcc_s.so*
-          version="$(git describe --tags --always)"
+          version="$(cat VERSION 2> /dev/null || git describe --tags --always)"
           export LINUXDEPLOY_OUTPUT_VERSION="$version"
           ./linuxdeploy --appdir AppDir --output appimage
           ls -la *.AppImage
