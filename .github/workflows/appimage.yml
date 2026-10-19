@@ -55,8 +55,7 @@ jobs:
           # BUILD_WITH_SYSTEM_JSONCPP=OFF: the loader brings its own copy of jsoncpp.
           cmake -S "$RUNNER_TEMP/openxr-src" -B "$RUNNER_TEMP/openxr-build" -G Ninja \
             -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/deps" \
-            -DDYNAMIC_LOADER=ON -DBUILD_WITH_SYSTEM_JSONCPP=OFF \
-            -DBUILD_WITH_WAYLAND_HEADERS=ON -DBUILD_WITH_XLIB_HEADERS=OFF -DBUILD_WITH_XCB_HEADERS=OFF
+            -DDYNAMIC_LOADER=ON -DBUILD_WITH_SYSTEM_JSONCPP=OFF
           cmake --build "$RUNNER_TEMP/openxr-build"
           cmake --install "$RUNNER_TEMP/openxr-build"
 
