@@ -89,10 +89,6 @@ static int GamepadActionHeld(const tHarness_gamepad_state* pState, tHarness_game
     return 0;
 }
 
-static int GamepadActionPressed(tHarness_gamepad_action pAction) {
-    return GamepadActionHeld(&gGamepad, pAction) && !GamepadActionHeld(&gGamepad_previous, pAction);
-}
-
 static void GamepadPressKey(int* pKeys, int pMark, int pKey) {
     if (pKey < 0 || pKey >= 123 || gGamepad_key_count >= GAMEPAD_MAX_KEYS) {
         return;
