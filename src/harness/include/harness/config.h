@@ -68,10 +68,7 @@ typedef enum tHarness_gamepad_action {
     eGamepad_action_look_left,
     eGamepad_action_look_forward,
     eGamepad_action_look_right,
-    eGamepad_action_hud_all,
-    eGamepad_action_hud_info,
-    eGamepad_action_hud_avatar,
-    eGamepad_action_hud_other,
+    eGamepad_action_pratcam,
     eGamepad_action_menu_confirm,
     eGamepad_action_menu_back,
     eGamepad_action_count

@@ -67,7 +67,37 @@ VolumeMultiplier = 1
 
 [Network]
 AdapterName = ""
+
+; Gamepad layout (SDL3 platform only), see "Gamepad" below
+[Gamepad]
+Steer = LeftStickX
+Throttle = RT
+Brake = LT
+Deadzone = 0.2
+Handbrake = A
+GearDown = RB
+Horn = LeftStick
+Recovery = Y
+Repair = X
+Cockpit = Back
+Map = B
+Menu = Start
+LookLeft = RightStickLeft
+LookForward = RightStickUp
+LookRight = RightStickRight
+Pratcam = DpadLeft
+MenuConfirm = A
+MenuBack = X, Start
+Rumble = 1
+RumblePedestrian = 0.35
+RumbleCar = 1.0
 ```
+
+## Gamepad
+
+With the SDL3 platform, the first connected gamepad is used (`Gamepad = 0` in `[General]` turns it off). Steering, throttle and brake are analog; the keyboard keeps working alongside it. In the menus the d-pad and the left stick move like the arrow keys, `MenuConfirm` is Enter and `MenuBack` is Escape. The gamepad rumbles when running over a pedestrian and when crashing into another car.
+
+Each action takes one or two inputs separated by a comma, or `None`. Inputs (Xbox names): `A`, `B`, `X`, `Y`, `Back`, `Guide`, `Start`, `LeftStick`, `RightStick` (stick presses), `LB`, `RB`, `DpadUp`, `DpadDown`, `DpadLeft`, `DpadRight`, `LeftStickLeft`/`Right`/`Up`/`Down`, `RightStickLeft`/`Right`/`Up`/`Down`, `LT`, `RT`. Actions: `Accelerate` (digital, in addition to `Throttle`), `Handbrake`, `GearDown`, `Horn`, `Recovery`, `Repair`, `Cockpit`, `Map`, `Menu`, `LookLeft`, `LookForward`, `LookRight`, `Pratcam`, `MenuConfirm`, `MenuBack`. Axes for `Steer`, `Throttle` and `Brake`: `None`, `LeftStickX`, `RightStickX`, `LT`, `RT`. `DETHRACE_GAMEPAD_DEBUG=1` logs every button change and the keys it sets.
 
 ## Order of precedence for game directory detection:
 1. Directory pointed to by DefaultGame

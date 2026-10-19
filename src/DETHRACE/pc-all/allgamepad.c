@@ -6,7 +6,7 @@
 // (harness_game_config.gamepad_config, defaults in harness.c).
 //
 // In menus the d-pad and the left stick act as arrow keys, plus MenuConfirm (Enter) and MenuBack
-// (Escape). During the race the actions of [Gamepad] apply; HudAvatar switches the pratcam.
+// (Escape). During the race the actions of [Gamepad] apply; Pratcam switches the pratcam.
 // Rumble: light when running over a pedestrian, strong when crashing into another car.
 
 #include "constants.h"
@@ -106,7 +106,7 @@ static void GamepadRaceKeys(int* pKeys, int pMark) {
             GamepadPressKey(pKeys, pMark, gKey_mapping[gGamepad_key_actions[i].function]);
         }
     }
-    if (GamepadActionHeld(&gGamepad, eGamepad_action_hud_avatar)) {
+    if (GamepadActionHeld(&gGamepad, eGamepad_action_pratcam)) {
         GamepadPressKey(pKeys, pMark, gKey_mapping[KEYMAP_PRATCAM]);
     }
 }
@@ -153,9 +153,9 @@ void PDGamepadSetKeyArray(int* pKeys, int pMark) {
             GamepadMenuKeys(pKeys, pMark);
         }
     }
-    // DEVRACE_GAMEPAD_DEBUG=1: log every change of the buttons and the keys they set
+    // DETHRACE_GAMEPAD_DEBUG=1: log every change of the buttons and the keys they set
     if (gGamepad_debug < 0) {
-        gGamepad_debug = getenv("DEVRACE_GAMEPAD_DEBUG") != NULL;
+        gGamepad_debug = getenv("DETHRACE_GAMEPAD_DEBUG") != NULL;
     }
     if (gGamepad_debug && gGamepad.buttons != gGamepad_previous.buttons) {
         LOG_INFO("gamepad: connected %d racing %d menu %d buttons 0x%x keys %d (%d %d %d)", gGamepad.connected, gProgram_state.racing,

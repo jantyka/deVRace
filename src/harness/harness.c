@@ -473,7 +473,7 @@ static const char* gamepad_input_names[eGamepad_input_count] = {
 };
 static const char* gamepad_action_names[eGamepad_action_count] = {
     "Accelerate", "Handbrake", "GearDown", "Horn", "Recovery", "Repair", "Cockpit", "Map", "Menu",
-    "LookLeft", "LookForward", "LookRight", "HudAll", "HudInfo", "HudAvatar", "HudOther",
+    "LookLeft", "LookForward", "LookRight", "Pratcam",
     "MenuConfirm", "MenuBack"
 };
 static const char* gamepad_axis_names[] = { "None", "LeftStickX", "RightStickX", "LT", "RT" };
@@ -486,8 +486,8 @@ static void Harness_SetGamepadBinding(tHarness_gamepad_action pAction, int pInpu
 static void Harness_DefaultGamepadConfig(void) {
     tHarness_gamepad_config* c = &harness_game_config.gamepad_config;
 
-    Harness_SetGamepadBinding(eGamepad_action_accelerate, eGamepad_button_a, -1);
-    Harness_SetGamepadBinding(eGamepad_action_handbrake, eGamepad_button_left_shoulder, -1);
+    Harness_SetGamepadBinding(eGamepad_action_accelerate, -1, -1);
+    Harness_SetGamepadBinding(eGamepad_action_handbrake, eGamepad_button_a, -1);
     Harness_SetGamepadBinding(eGamepad_action_gear_down, eGamepad_button_right_shoulder, -1);
     Harness_SetGamepadBinding(eGamepad_action_horn, eGamepad_button_left_stick, -1);
     Harness_SetGamepadBinding(eGamepad_action_recovery, eGamepad_button_y, -1);
@@ -498,10 +498,7 @@ static void Harness_DefaultGamepadConfig(void) {
     Harness_SetGamepadBinding(eGamepad_action_look_left, eGamepad_input_right_stick_left, -1);
     Harness_SetGamepadBinding(eGamepad_action_look_forward, eGamepad_input_right_stick_up, -1);
     Harness_SetGamepadBinding(eGamepad_action_look_right, eGamepad_input_right_stick_right, -1);
-    Harness_SetGamepadBinding(eGamepad_action_hud_all, eGamepad_button_dpad_down, -1);
-    Harness_SetGamepadBinding(eGamepad_action_hud_info, eGamepad_button_dpad_up, -1);
-    Harness_SetGamepadBinding(eGamepad_action_hud_avatar, eGamepad_button_dpad_left, -1);
-    Harness_SetGamepadBinding(eGamepad_action_hud_other, eGamepad_button_dpad_right, -1);
+    Harness_SetGamepadBinding(eGamepad_action_pratcam, eGamepad_button_dpad_left, -1);
     Harness_SetGamepadBinding(eGamepad_action_menu_confirm, eGamepad_button_a, -1);
     Harness_SetGamepadBinding(eGamepad_action_menu_back, eGamepad_button_x, eGamepad_button_start);
     c->steer = eGamepad_axis_left_x;
