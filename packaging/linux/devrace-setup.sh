@@ -190,10 +190,11 @@ else
 fi
 
 # Icon out of the AppImage (unpacking works without FUSE).
-(cd "$tmp" && "$APP_PATH" --appimage-extract devrace.png > /dev/null 2>&1) || true
-if [ -f "$tmp/squashfs-root/devrace.png" ]; then
+icon_in_image="usr/share/icons/hicolor/256x256/apps/devrace.png"
+(cd "$tmp" && "$APP_PATH" --appimage-extract "$icon_in_image" > /dev/null 2>&1) || true
+if [ -f "$tmp/squashfs-root/$icon_in_image" ]; then
     mkdir -p "$(dirname "$ICON_FILE")"
-    cp -f "$tmp/squashfs-root/devrace.png" "$ICON_FILE"
+    cp -f "$tmp/squashfs-root/$icon_in_image" "$ICON_FILE"
 else
     warn "could not take the icon out of the AppImage"
 fi
