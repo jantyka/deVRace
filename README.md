@@ -230,7 +230,6 @@ Environment variables for debugging: `DEVRACE_VR_DEBUG=1` (per-eye diagnostics),
 ## Known issues
 
 - The first SteamVR start after connecting the Index may hang for some seconds and restart its compositor; a second start works ([SteamVR-for-Linux#948](https://github.com/ValveSoftware/SteamVR-for-Linux/issues/948)).
-- Car shadows are not drawn in the 3dfx mode (also not on the monitor).
 - Loading screens pause the headset image briefly.
 - The view is centred where your head is when the game starts; to recenter it there is the gamepad (right stick press) or SteamVR's own recentring, no key.
 - No 2D dashboard in VR.
