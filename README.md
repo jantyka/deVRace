@@ -79,6 +79,28 @@ The slop pack's other features (widescreen, MSAA and sample rate shading, meld, 
 - A headset (tested: Valve Index)
 - Carmageddon game data with `DATA/PIXELMAP/SMOKE.PIX` (the 3dfx assets; the Steam/GOG Max Pack has them)
 
+## Installing (AppImage)
+
+Each [release](https://github.com/jantyka/deVRace/releases) has an AppImage (x86_64) and a setup script. Download both into one folder and run the script:
+
+```sh
+chmod +x devrace-setup.sh deVRace-*.AppImage
+./devrace-setup.sh
+```
+
+The script needs no root and only writes into your home directory. It
+
+- installs the AppImage as `~/Applications/deVRace.AppImage` (and the command `~/.local/bin/devrace`),
+- finds Carmageddon (Steam Max Pack, GOG, Heroic; or `--game-dir /path/to/game`) and copies the game data to `~/.local/share/devrace/games/`, because the game writes save games and key maps into its data folder; your Steam/GOG installation is not changed,
+- creates `~/.local/share/devrace/dethrace.ini` if there is none,
+- adds **deVRace** to the application menu, with the Splat Pack as a second action (right click).
+
+Then start SteamVR and deVRace from the menu. `./devrace-setup.sh --help` lists the options, `--uninstall` removes it again (`--uninstall --purge` also the config and the copied game data). Run without arguments again to update to a newer AppImage; your config and save games are kept.
+
+The AppImage bundles SDL3 and the OpenXR loader. The GPU driver, the OpenXR runtime and the C++ runtime come from your system. It needs FUSE 2 (`libfuse.so.2`; Arch: `fuse2`) to start directly; without it the setup script makes the menu entry unpack it on each start.
+
+Without the script: `./deVRace-*.AppImage --dir /path/to/CARMA` (with a `dethrace.ini` as in [Setup and running](#setup-and-running)).
+
 ## Building
 
 Packages (Arch Linux):
