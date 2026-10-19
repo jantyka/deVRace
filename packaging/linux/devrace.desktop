@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=deVRace
+GenericName=Carmageddon in VR
+Comment=Carmageddon (Dethrace) in VR through OpenXR
+Exec=devrace
+Icon=devrace
+Terminal=false
+Categories=Game;ActionGame;
+Keywords=Carmageddon;Dethrace;VR;OpenXR;
+StartupWMClass=devrace

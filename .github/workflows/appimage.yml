@@ -1,0 +1,141 @@
+name: AppImage
+
+# Builds the deVRace VR build as an AppImage and offers it as a workflow artifact, together with
+# the setup script. Nothing is published as a release from here.
+#
+# Built on Ubuntu 22.04 so that the result also runs on distributions with an older glibc.
+# The AppImage contains the game, SDL3 and the OpenXR loader. It does not contain game data,
+# an OpenXR runtime (SteamVR, Monado), the GPU driver (EGL/OpenGL) or the C++ runtime: those
+# come from the system, so that the runtime and the driver find the libraries they were built for.
+
+on:
+  workflow_dispatch:
+
+env:
+  SDL3_TAG: release-3.4.18
+  OPENXR_TAG: release-1.1.60
+  # linuxdeploy is a prebuilt tool. Pin the release and check its SHA-256 (the digest that
+  # GitHub lists for this release asset).
+  LINUXDEPLOY_TAG: 1-alpha-20251107-1
+  LINUXDEPLOY_SHA256: c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d
+
+jobs:
+  appimage:
+    name: AppImage (x86_64)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # The version shown by the game comes from "git describe", which needs the tags.
+          fetch-depth: 0
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build file imagemagick \
+            libgl-dev libegl-dev libgles-dev libgl1-mesa-dev \
+            libwayland-dev libxkbcommon-dev wayland-protocols libdecor-0-dev \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev libxfixes-dev \
+            libxtst-dev libpulse-dev libasound2-dev libpipewire-0.3-dev libudev-dev libdbus-1-dev
+
+      - name: Build SDL3
+        run: |
+          git clone --depth 1 --branch "$SDL3_TAG" https://github.com/libsdl-org/SDL "$RUNNER_TEMP/sdl-src"
+          cmake -S "$RUNNER_TEMP/sdl-src" -B "$RUNNER_TEMP/sdl-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/deps" \
+            -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF \
+            -DSDL_WAYLAND=ON -DSDL_WAYLAND_LIBDECOR=ON -DSDL_X11=ON -DSDL_KMSDRM=OFF
+          cmake --build "$RUNNER_TEMP/sdl-build"
+          cmake --install "$RUNNER_TEMP/sdl-build"
+
+      - name: Build the OpenXR loader
+        run: |
+          git clone --depth 1 --branch "$OPENXR_TAG" https://github.com/KhronosGroup/OpenXR-SDK "$RUNNER_TEMP/openxr-src"
+          # BUILD_WITH_SYSTEM_JSONCPP=OFF: the loader brings its own copy of jsoncpp.
+          cmake -S "$RUNNER_TEMP/openxr-src" -B "$RUNNER_TEMP/openxr-build" -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/deps" \
+            -DDYNAMIC_LOADER=ON -DBUILD_WITH_SYSTEM_JSONCPP=OFF \
+            -DBUILD_WITH_WAYLAND_HEADERS=ON -DBUILD_WITH_XLIB_HEADERS=OFF -DBUILD_WITH_XCB_HEADERS=OFF
+          cmake --build "$RUNNER_TEMP/openxr-build"
+          cmake --install "$RUNNER_TEMP/openxr-build"
+
+      - name: Build
+        run: |
+          cmake -B build-vr -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/deps" \
+            -DDETHRACE_PLATFORM_SDL2=OFF -DDETHRACE_PLATFORM_SDL3=ON -DDETHRACE_VR=ON
+          cmake --build build-vr
+
+      - name: Assemble the AppDir
+        run: |
+          mkdir -p AppDir/usr/bin AppDir/usr/share/doc/devrace
+          cp build-vr/devrace AppDir/usr/bin/
+          cp LICENSE README.md AppDir/usr/share/doc/devrace/
+          cp lib/BRender-v1.3.2/LICENSE AppDir/usr/share/doc/devrace/LICENSE.BRender
+          # The icon from the repository is not square; pad it to 256x256.
+          convert packaging/icon_source.png -resize 256x256 -background none -gravity center \
+            -extent 256x256 devrace.png
+
+      - name: Build the AppImage
+        env:
+          # No FUSE on the runner.
+          APPIMAGE_EXTRACT_AND_RUN: 1
+        run: |
+          curl --fail --location --silent --show-error --output linuxdeploy \
+            "https://github.com/linuxdeploy/linuxdeploy/releases/download/$LINUXDEPLOY_TAG/linuxdeploy-x86_64.AppImage"
+          echo "$LINUXDEPLOY_SHA256  linuxdeploy" | sha256sum --check
+          chmod +x linuxdeploy
+          export LD_LIBRARY_PATH="$RUNNER_TEMP/deps/lib"
+          ./linuxdeploy --appdir AppDir \
+            --executable AppDir/usr/bin/devrace \
+            --custom-apprun packaging/linux/AppRun \
+            --desktop-file packaging/linux/devrace.desktop \
+            --icon-file devrace.png
+          # The C++ runtime comes from the system: the OpenXR runtime (e.g. SteamVR's) is loaded
+          # into the game and may need a newer libstdc++ than the one from Ubuntu 22.04.
+          rm -f AppDir/usr/lib/libstdc++.so* AppDir/usr/lib/libgcc_s.so*
+          version="$(git describe --tags --always)"
+          export LINUXDEPLOY_OUTPUT_VERSION="$version"
+          ./linuxdeploy --appdir AppDir --output appimage
+          ls -la *.AppImage
+
+      - name: Check the result
+        run: |
+          image="$(ls deVRace*.AppImage)"
+          chmod +x "$image"
+          "./$image" --appimage-extract > /dev/null
+          echo "Bundled libraries:"
+          ls squashfs-root/usr/lib | sort | tr '\n' ' '
+          echo
+          test -f squashfs-root/usr/lib/libSDL3.so.0
+          test -f squashfs-root/usr/lib/libopenxr_loader.so.1
+          if ls squashfs-root/usr/lib | grep -E '^lib(EGL|GL|OpenGL|GLdispatch|stdc\+\+|wayland-client)\.so'; then
+            echo "These libraries must come from the system."
+            exit 1
+          fi
+          echo "Libraries the bundled binary cannot resolve:"
+          if LD_LIBRARY_PATH= ldd squashfs-root/usr/bin/devrace | grep "not found"; then
+            exit 1
+          fi
+          echo "(none)"
+
+          # Start the AppImage itself once with an empty home and without a display. It has to
+          # start and then stop because it finds neither game data nor a video device.
+          mkdir "$RUNNER_TEMP/emptyhome"
+          env -u WAYLAND_DISPLAY -u DISPLAY HOME="$RUNNER_TEMP/emptyhome" APPIMAGE_EXTRACT_AND_RUN=1 \
+            timeout 60 "./$image" > start.log 2>&1 || true
+          tail -n 15 start.log
+          grep -q "Dethrace version" start.log
+
+          cp packaging/linux/devrace-setup.sh .
+          sha256sum "$image" devrace-setup.sh | tee SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deVRace-AppImage
+          path: |
+            deVRace*.AppImage
+            devrace-setup.sh
+            SHA256SUMS
+          if-no-files-found: error

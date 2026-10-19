@@ -1,0 +1,15 @@
+#!/bin/sh
+# AppRun for the deVRace AppImage.
+#
+# Starts the bundled game with its real path. Without a game directory (--dir) and without
+# [Games] in dethrace.ini the game looks for the data next to the program, which inside the
+# AppImage is never the case; it then falls back to ~/.local/share/devrace/.
+HERE="$(dirname "$(readlink -f "$0")")"
+
+# deVRace is a native Wayland client. SDL3 only prefers Wayland on some compositors, so ask
+# for it when there is a Wayland session and the user did not choose a driver.
+if [ -n "$WAYLAND_DISPLAY" ] && [ -z "$SDL_VIDEODRIVER" ]; then
+    export SDL_VIDEODRIVER=wayland
+fi
+
+exec "$HERE/usr/bin/devrace" "$@"
