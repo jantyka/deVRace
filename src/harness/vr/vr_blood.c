@@ -515,57 +515,69 @@ static void VR_Blood_ShapeSprite(tVR_splat* pSplat, float pOver_kmh) {
     pSplat->ragged = 0.5f;
 }
 
-static void VR_Blood_Spawn(float pSpeed_kmh) {
-    tVR_splat* splat;
-    float over;
+// Faster means more splatters: 3 to 4 at 70 km/h, 7 to 8 at 100 km/h, 16 from about 170 km/h; in
+// the far chase camera 30 % fewer, at least one. pOver_kmh: speed above the lowest one.
+static int VR_Blood_SplatterCount(float pOver_kmh) {
     int count;
-    int i;
-    int j;
-    int slot;
-    int tries;
-    float x;
-    float y;
-    float dx;
 
-    over = pSpeed_kmh - VR_BLOOD_MIN_KMH;
-    if (over < 0.0f) {
-        over = 0.0f;
-    }
-    // Faster means more splatters: 3 to 4 at 70 km/h, 7 to 8 at 100 km/h, 16 from about 170 km/h
-    count = 3 + (int)(over / 7.0f) + (VR_Blood_Random() < 0.5f ? 0 : 1);
+    count = 3 + (int)(pOver_kmh / 7.0f) + (VR_Blood_Random() < 0.5f ? 0 : 1);
     if (count > VR_BLOOD_MAX_PER_HIT) {
         count = VR_BLOOD_MAX_PER_HIT;
     }
-    // Far chase camera: 30 % fewer, at least one
     if (view == VR_VIEW_FAR_CHASE) {
         count = (int)(count * (1.0f - VR_BLOOD_FAR_FEWER) + 0.5f);
         if (count < 1) {
             count = 1;
         }
     }
+    return count;
+}
+
+// A free slot, otherwise the oldest splatter makes room
+static tVR_splat* VR_Blood_FreeSlot(void) {
+    int slot = 0;
+    int i;
+
+    for (i = 0; i < VR_BLOOD_MAX_SPLATS; i++) {
+        if (splats[i].radius == 0.0f) {
+            return &splats[i];
+        }
+        if (splats[i].age > splats[slot].age) {
+            slot = i;
+        }
+    }
+    return &splats[slot];
+}
+
+// Where a splatter hits: anywhere, only a small spot in the centre of the view stays free. On the
+// windscreen lower down, as the blood is pushed up from there.
+static void VR_Blood_HitPosition(float* pX, float* pY) {
+    float dx;
+    int tries;
+
+    for (tries = 0; tries < 8; tries++) {
+        *pX = 0.06f + 0.88f * VR_Blood_Random();
+        *pY = view == VR_VIEW_COCKPIT ? 0.08f + 0.75f * VR_Blood_Random() : 0.12f + 0.83f * VR_Blood_Random();
+        dx = (*pX - 0.5f) * quad_aspect;
+        if (dx * dx + (*pY - 0.5f) * (*pY - 0.5f) > 0.08f * 0.08f) {
+            return;
+        }
+    }
+}
+
+static void VR_Blood_Spawn(float pSpeed_kmh) {
+    tVR_splat* splat;
+    float over;
+    int count;
+    int i;
+    float x;
+    float y;
+
+    over = fmaxf(pSpeed_kmh - VR_BLOOD_MIN_KMH, 0.0f);
+    count = VR_Blood_SplatterCount(over);
     for (i = 0; i < count; i++) {
-        // A free slot, otherwise the oldest splatter makes room
-        slot = 0;
-        for (j = 0; j < VR_BLOOD_MAX_SPLATS; j++) {
-            if (splats[j].radius == 0.0f) {
-                slot = j;
-                break;
-            }
-            if (splats[j].age > splats[slot].age) {
-                slot = j;
-            }
-        }
-        // Anywhere, only a small spot in the centre of the view stays free. On the windscreen lower
-        // down, as the blood is pushed up from there.
-        for (tries = 0; tries < 8; tries++) {
-            x = 0.06f + 0.88f * VR_Blood_Random();
-            y = view == VR_VIEW_COCKPIT ? 0.08f + 0.75f * VR_Blood_Random() : 0.12f + 0.83f * VR_Blood_Random();
-            dx = (x - 0.5f) * quad_aspect;
-            if (dx * dx + (y - 0.5f) * (y - 0.5f) > 0.08f * 0.08f) {
-                break;
-            }
-        }
-        splat = &splats[slot];
+        splat = VR_Blood_FreeSlot();
+        VR_Blood_HitPosition(&x, &y);
         splat->x = x;
         splat->y = y;
         splat->age = -0.15f * VR_Blood_Random();
@@ -720,14 +732,9 @@ int VR_Blood_Active(void) {
     return 0;
 }
 
-// Pixel blood: uploads sprites that are new, then draws each splatter made of one as a turned quad,
-// blended over what is there already (premultiplied). Texture unit 0 is active.
-static void VR_Blood_DrawSprites(float pAspect) {
+// Pixel blood: uploads the sprites handed over since the last draw
+static void VR_Blood_UploadSprites(void) {
     tVR_blood_sprite* sprite;
-    tVR_splat* splat;
-    float x;
-    float y;
-    float fade;
     int i;
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
@@ -748,7 +755,19 @@ static void VR_Blood_DrawSprites(float pAspect) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sprite->width, sprite->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, sprite->rgba);
         sprite->dirty = 0;
     }
+}
 
+// Pixel blood: draws each splatter made of a sprite as a turned quad, blended over what is there
+// already (premultiplied). Texture unit 0 is active.
+static void VR_Blood_DrawSprites(float pAspect) {
+    tVR_blood_sprite* sprite;
+    tVR_splat* splat;
+    float x;
+    float y;
+    float fade;
+    int i;
+
+    VR_Blood_UploadSprites();
     glEnable(GL_BLEND);
     glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
     glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
@@ -779,7 +798,8 @@ static void VR_Blood_DrawSprites(float pAspect) {
     }
 }
 
-void VR_Blood_Draw(int pWidth, int pHeight, float pAspect) {
+// The drawn splatters, all in one full screen pass (it covers the whole quad, so it goes first)
+static void VR_Blood_DrawSplatters(float pAspect) {
     static GLfloat a[VR_BLOOD_MAX_SPLATS * 4];
     static GLfloat b[VR_BLOOD_MAX_SPLATS * 4];
     static GLfloat c[VR_BLOOD_MAX_SPLATS * 4];
@@ -787,23 +807,12 @@ void VR_Blood_Draw(int pWidth, int pHeight, float pAspect) {
     static GLfloat p[VR_BLOOD_MAX_SPLATS * VR_BLOOD_PATH_POINTS * 2];
     tVR_splat* splat;
     int count = 0;
-    int sprite_count = 0;
     int i;
     int k;
 
-    quad_aspect = pAspect;
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    if (program == 0) {
-        return;
-    }
     for (i = 0; i < VR_BLOOD_MAX_SPLATS; i++) {
         splat = &splats[i];
-        if (splat->radius == 0.0f) {
-            continue;
-        }
-        if (splat->sprite >= 0) {
-            sprite_count++;
+        if (splat->radius == 0.0f || splat->sprite >= 0) {
             continue;
         }
         a[count * 4 + 0] = splat->x;
@@ -828,28 +837,34 @@ void VR_Blood_Draw(int pWidth, int pHeight, float pAspect) {
         }
         count++;
     }
-    if (count == 0 && sprite_count == 0) {
+    if (count == 0) {
         return;
     }
+    glUseProgram(program);
+    glUniform1i(uniform_count, count);
+    glUniform1f(uniform_aspect, pAspect);
+    glUniform4fv(uniform_a, count, a);
+    glUniform4fv(uniform_b, count, b);
+    glUniform4fv(uniform_c, count, c);
+    glUniform4fv(uniform_d, count, d);
+    glUniform4fv(uniform_p, count * VR_BLOOD_PATH_POINTS / 2, p);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+}
 
+void VR_Blood_Draw(int pWidth, int pHeight, float pAspect) {
+    quad_aspect = pAspect;
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    if (program == 0) {
+        return;
+    }
     // The caller saved the GL state and restores it (VR_BeginSwapchainImage in vr.c)
     GLUtil_PlainState();
     glActiveTexture(GL_TEXTURE0);
     glViewport(0, 0, pWidth, pHeight);
     glBindVertexArray(vertex_array);
-    // The drawn splatters cover the whole quad in one pass, so they go first
-    if (count != 0) {
-        glUseProgram(program);
-        glUniform1i(uniform_count, count);
-        glUniform1f(uniform_aspect, pAspect);
-        glUniform4fv(uniform_a, count, a);
-        glUniform4fv(uniform_b, count, b);
-        glUniform4fv(uniform_c, count, c);
-        glUniform4fv(uniform_d, count, d);
-        glUniform4fv(uniform_p, count * VR_BLOOD_PATH_POINTS / 2, p);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-    }
-    if (sprite_count != 0) {
+    VR_Blood_DrawSplatters(pAspect);
+    if (sprite_program != 0) {
         VR_Blood_DrawSprites(pAspect);
     }
 }
