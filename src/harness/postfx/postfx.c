@@ -9,6 +9,7 @@
 // DEVRACE_POSTFX_TIMING=1 logs the GPU time of the effect every 300 images.
 
 #include "postfx.h"
+#include "../gl_util.h"
 
 #include "include/harness/config.h"
 #include "include/harness/trace.h"
@@ -113,23 +114,6 @@ typedef struct tPostFX_target {
 } tPostFX_target;
 
 // GL state changed while drawing an effect
-typedef struct tPostFX_gl_state {
-    GLint program;
-    GLint vertex_array;
-    GLint active_texture;
-    GLint textures[4];
-    GLint draw_framebuffer;
-    GLint read_framebuffer;
-    GLint viewport[4];
-    GLboolean colour_mask[4];
-    GLboolean depth_mask;
-    GLboolean depth_test;
-    GLboolean blend;
-    GLboolean cull_face;
-    GLboolean stencil_test;
-    GLboolean scissor_test;
-} tPostFX_gl_state;
-
 static tPostFX_shader gPostFX_shaders[ePostFX_program_count];
 static GLuint gPostFX_vertex_array;
 static int gPostFX_vr;
@@ -292,9 +276,8 @@ static GLuint PostFX_CompileShader(GLenum pType, const char* pName, const tPostF
     size_t body_size;
     char* source;
     size_t length = 0;
+    char label[256];
     GLuint shader;
-    GLint ok;
-    char log[2048];
 
     if (pHead != NULL) {
         head = PostFX_LoadSource(pHead, &head_size);
@@ -310,17 +293,9 @@ static GLuint PostFX_CompileShader(GLenum pType, const char* pName, const tPostF
     free(head);
     free(body);
 
-    shader = glCreateShader(pType);
-    glShaderSource(shader, 1, (const GLchar* const*)&source, NULL);
-    glCompileShader(shader);
+    snprintf(label, sizeof(label), "Post effect shader %s", pName);
+    shader = GLUtil_CompileShader(pType, source, label);
     free(source);
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
-    if (!ok) {
-        glGetShaderInfoLog(shader, sizeof(log), NULL, log);
-        LOG_WARN("Post effect shader %s does not compile: %s", pName, log);
-        glDeleteShader(shader);
-        return 0;
-    }
     return shader;
 }
 
@@ -330,8 +305,7 @@ static tPostFX_shader* PostFX_GetShader(tPostFX_program pProgram) {
     const tPostFX_source* source = &gPostFX_fragment_sources[pProgram];
     GLuint vertex_shader;
     GLuint fragment_shader;
-    GLint ok;
-    char log[2048];
+    char label[256];
 
     if (shader->program != 0) {
         return shader;
@@ -342,27 +316,9 @@ static tPostFX_shader* PostFX_GetShader(tPostFX_program pProgram) {
     shader->failed = 1;
     vertex_shader = PostFX_CompileShader(GL_VERTEX_SHADER, gPostFX_vertex_source.file, NULL, &gPostFX_vertex_source);
     fragment_shader = PostFX_CompileShader(GL_FRAGMENT_SHADER, source->file, &gPostFX_common_source, source);
-    if (vertex_shader == 0 || fragment_shader == 0) {
-        if (vertex_shader != 0) {
-            glDeleteShader(vertex_shader);
-        }
-        if (fragment_shader != 0) {
-            glDeleteShader(fragment_shader);
-        }
-        return NULL;
-    }
-    shader->program = glCreateProgram();
-    glAttachShader(shader->program, vertex_shader);
-    glAttachShader(shader->program, fragment_shader);
-    glLinkProgram(shader->program);
-    glDeleteShader(vertex_shader);
-    glDeleteShader(fragment_shader);
-    glGetProgramiv(shader->program, GL_LINK_STATUS, &ok);
-    if (!ok) {
-        glGetProgramInfoLog(shader->program, sizeof(log), NULL, log);
-        LOG_WARN("Post effect shader %s does not link: %s", source->file, log);
-        glDeleteProgram(shader->program);
-        shader->program = 0;
+    snprintf(label, sizeof(label), "Post effect shader %s", source->file);
+    shader->program = GLUtil_LinkProgram(vertex_shader, fragment_shader, label);
+    if (shader->program == 0) {
         return NULL;
     }
     shader->u_colour = glGetUniformLocation(shader->program, "u_colour");
@@ -440,66 +396,6 @@ static void PostFX_CheckShaderDir(void) {
         PostFX_DeletePrograms();
     }
     gPostFX_newest_file = newest;
-}
-
-static void PostFX_SaveState(tPostFX_gl_state* pState) {
-    int i;
-
-    glGetIntegerv(GL_CURRENT_PROGRAM, &pState->program);
-    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &pState->vertex_array);
-    glGetIntegerv(GL_ACTIVE_TEXTURE, &pState->active_texture);
-    for (i = 0; i < 4; i++) {
-        glActiveTexture(GL_TEXTURE0 + i);
-        glGetIntegerv(GL_TEXTURE_BINDING_2D, &pState->textures[i]);
-    }
-    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &pState->draw_framebuffer);
-    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &pState->read_framebuffer);
-    glGetIntegerv(GL_VIEWPORT, pState->viewport);
-    glGetBooleanv(GL_COLOR_WRITEMASK, pState->colour_mask);
-    glGetBooleanv(GL_DEPTH_WRITEMASK, &pState->depth_mask);
-    pState->depth_test = glIsEnabled(GL_DEPTH_TEST);
-    pState->blend = glIsEnabled(GL_BLEND);
-    pState->cull_face = glIsEnabled(GL_CULL_FACE);
-    pState->stencil_test = glIsEnabled(GL_STENCIL_TEST);
-    pState->scissor_test = glIsEnabled(GL_SCISSOR_TEST);
-
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_STENCIL_TEST);
-    glDisable(GL_SCISSOR_TEST);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-    glDepthMask(GL_FALSE);
-}
-
-static void PostFX_Enable(GLenum pCapability, GLboolean pOn) {
-    if (pOn) {
-        glEnable(pCapability);
-    } else {
-        glDisable(pCapability);
-    }
-}
-
-static void PostFX_RestoreState(const tPostFX_gl_state* pState) {
-    int i;
-
-    for (i = 0; i < 4; i++) {
-        glActiveTexture(GL_TEXTURE0 + i);
-        glBindTexture(GL_TEXTURE_2D, pState->textures[i]);
-    }
-    glActiveTexture(pState->active_texture);
-    glUseProgram(pState->program);
-    glBindVertexArray(pState->vertex_array);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, pState->draw_framebuffer);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, pState->read_framebuffer);
-    glViewport(pState->viewport[0], pState->viewport[1], pState->viewport[2], pState->viewport[3]);
-    glColorMask(pState->colour_mask[0], pState->colour_mask[1], pState->colour_mask[2], pState->colour_mask[3]);
-    glDepthMask(pState->depth_mask);
-    PostFX_Enable(GL_DEPTH_TEST, pState->depth_test);
-    PostFX_Enable(GL_BLEND, pState->blend);
-    PostFX_Enable(GL_CULL_FACE, pState->cull_face);
-    PostFX_Enable(GL_STENCIL_TEST, pState->stencil_test);
-    PostFX_Enable(GL_SCISSOR_TEST, pState->scissor_test);
 }
 
 static void PostFX_CreateTexture(GLuint* pTexture, GLint pInternal_format, GLenum pFormat, GLenum pType, GLint pFilter, int pWidth, int pHeight) {
@@ -699,7 +595,7 @@ static tPostFX_program PostFX_ProgramOfEffect(int pEffect) {
 }
 
 int PostFX_Apply(int pEffect, unsigned int pColour_texture, unsigned int pDepth_texture, int pWidth, int pHeight, int pX, int pY) {
-    tPostFX_gl_state state;
+    tGL_util_state state;
     tPostFX_shader* shader = NULL;
     tPostFX_program program;
     int timing_slot;
@@ -717,7 +613,8 @@ int PostFX_Apply(int pEffect, unsigned int pColour_texture, unsigned int pDepth_
         }
     }
 
-    PostFX_SaveState(&state);
+    GLUtil_SaveState(&state);
+    GLUtil_PlainState();
     if (gPostFX_vertex_array == 0) {
         // The core profile draws nothing without a vertex array, even with no attributes
         glGenVertexArrays(1, &gPostFX_vertex_array);
@@ -731,7 +628,7 @@ int PostFX_Apply(int pEffect, unsigned int pColour_texture, unsigned int pDepth_
         PostFX_Draw(shader, pColour_texture, pWidth, pHeight, pDepth_texture, (float)pHeight);
     }
     PostFX_EndTiming(timing_slot);
-    PostFX_RestoreState(&state);
+    GLUtil_RestoreState(&state);
     return ok;
 }
 

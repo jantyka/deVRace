@@ -83,6 +83,8 @@ if(NOT MSVC_42_FOR_RECCMP)
         list(APPEND POSTFX_EMBEDDED "${CMAKE_CURRENT_BINARY_DIR}/postfx/${shader}.h")
     endforeach()
     target_sources(harness PRIVATE
+        gl_util.c
+        gl_util.h
         include/harness/postfx.h
         postfx/postfx.c
         postfx/postfx.h
