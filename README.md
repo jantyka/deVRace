@@ -16,7 +16,7 @@ The original Dethrace README is in [docs/README.dethrace.md](docs/README.dethrac
 
 ### VR (OpenXR)
 
-- **Stereo 3D with head tracking** on top of the game's own cameras. The chase and cockpit cameras behave as in the original (no smoothing, no comfort changes); your head pose is added to them.
+- **Stereo 3D with head tracking** on top of the game's own cameras. The chase and cockpit cameras behave as in the original (no smoothing); your head pose is added to them. An optional comfort vignette (below) narrows the view in fast turns.
 - **Per-eye asymmetric projection** from the OpenXR runtime, rendered by Dethrace's OpenGL ("3dfx") renderer into one render target per eye.
 - **Sky fixed to the world**: the original sky strip is rebuilt as a cylinder around you, so it stays put when you look around.
 - **Menus and HUD on a panel** in front of you (OpenXR quad layer). In the race the HUD floats over the 3D view; every HUD element can be switched on and off.
