@@ -6,8 +6,9 @@
 // original buttons and matched to the palette of the screen. Behind it, the VR options screen uses
 // the options screen's frame with a dark panel of its own over the buttons, and a DONE button drawn
 // over the frame's CANCEL button. Each option is a row switched on and off by confirming it; the
-// change is saved to dethrace.ini. The EFFECT row below SHADER is only there while SHADER is on;
-// confirming it or left/right go through the post effects (harness/postfx.h).
+// change is saved to dethrace.ini. Some rows are only there while the row above them is on: PIXEL
+// BLOOD below CAMERA BLOOD EFFECT and EFFECT below SHADER. Confirming EFFECT or left/right go
+// through the post effects (harness/postfx.h).
 
 #include "vrmenu.h"
 
@@ -36,7 +37,8 @@ static const int gVR_row_step[2] = { 14, 34 };
 
 // The VR options: label, value, its entry in dethrace.ini and what changes at once when it is
 // switched (NULL: from the next race on, or nothing beyond the value). is_effect: the post effect
-// row, a choice of effects instead of on and off.
+// row, a choice of effects instead of on and off. shown_if: the row is only shown while this value
+// is on (NULL: always).
 static void VRMenu_ApplyDrawDistance(void);
 static const struct {
     char* label;
@@ -45,13 +47,15 @@ static const struct {
     const char* name;
     void (*apply)(void);
     int is_effect;
+    int* shown_if;
 } gVR_options[] = {
     { "CAMERA BLOOD EFFECT", &harness_game_config.vr_blood, "VR", "Blood", NULL },
+    { "PIXEL BLOOD", &harness_game_config.vr_blood_pixel, "VR", "BloodPixel", NULL, 0, &harness_game_config.vr_blood },
     { "VASTLY EXTENDED DRAW DISTANCE", &harness_game_config.extend_draw_distance, "Slop", "ExtendDrawDistance", VRMenu_ApplyDrawDistance },
     { "OPPONENT CAR LEVEL OF DETAIL ALWAYS MAX", &harness_game_config.opponent_max_detail, "Slop", "OpponentMaxDetail", NULL },
     { "WHEEL MODEL ROUNDING", &harness_game_config.round_wheels, "Slop", "RoundWheels", NULL },
     { "SHADER", &harness_game_config.post_shader, "Graphics", "Shader", NULL },
-    { "EFFECT", &harness_game_config.post_effect, "Graphics", "PostEffect", NULL, 1 },
+    { "EFFECT", &harness_game_config.post_effect, "Graphics", "PostEffect", NULL, 1, &harness_game_config.post_shader },
 };
 
 // VR options screen: the options are choices 0 to n-1, DONE (also escape) comes last
@@ -281,9 +285,9 @@ static void VRMenu_RowRect(int pIndex, tRectile* pRect) {
     }
 }
 
-// The effect row is only shown while the shader is on
+// PIXEL BLOOD only while the blood is on, EFFECT only while the shader is on
 static int VRMenu_RowShown(int pIndex) {
-    return !gVR_options[pIndex].is_effect || harness_game_config.post_shader;
+    return gVR_options[pIndex].shown_if == NULL || *gVR_options[pIndex].shown_if;
 }
 
 // Next post effect in pDirection (1 or -1) that can be shown now

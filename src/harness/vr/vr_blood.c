@@ -8,6 +8,11 @@
 // faster it goes (when standing it slowly runs down). The splatters hold for a moment and then
 // fade out.
 //
+// Pixel blood ([VR] BloodPixel): the splatters are the game's own gib sprites (splats and chunks,
+// rarely a bone, an eyeball or a colon), turned at random and drawn with their big pixels. They
+// neither drip nor leave a trail; on the windscreen the airstream pushes them along all the same.
+// Until a race has loaded the sprites, the drawn splatters stand in for them.
+//
 // Debugging: DEVRACE_VR_BLOOD_TEST=<km/h> splatters the lens every 3 seconds as if a pedestrian had
 // been run over at that speed (without the random chance), also in the menus.
 
@@ -20,6 +25,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #define VR_BLOOD_MAX_SPLATS 32
@@ -44,6 +50,15 @@
 // Far chase camera: splatters this much smaller, and this share fewer
 #define VR_BLOOD_FAR_SIZE 0.6f
 #define VR_BLOOD_FAR_FEWER 0.3f
+
+// Pixel blood: the sprites, the common ones first. Each splatter is a rare one at this chance.
+#define VR_BLOOD_COMMON_SPRITES 7
+#define VR_BLOOD_RARE_CHANCE 0.1f
+static const char* sprite_names[] = {
+    "SPLAT1.PIX", "SPLAT2.PIX", "SPLATOUT.PIX", "CHUNK01.PIX", "CHUNK02.PIX", "CHUNK03.PIX", "CHUNK04.PIX",
+    "BONE.PIX", "EYEBALL.PIX", "COLON.PIX"
+};
+#define VR_BLOOD_SPRITE_COUNT ((int)(sizeof(sprite_names) / sizeof(sprite_names[0])))
 
 // Menus: moving the mouse faster than this many screen sizes per second splatters blood, at most once
 // per cooldown
@@ -71,7 +86,18 @@ typedef struct tVR_splat {
     float jitter;   // windscreen: changing speed, so that it moves in bursts (0..1)
     int path_count; // windscreen: points of the trail behind the blob, newest first
     float path[VR_BLOOD_PATH_POINTS][2];
+    int sprite;   // pixel blood: index into sprites, -1 = a drawn splatter
+    float pixel;  // pixel blood: size of one sprite pixel, fraction of the quad's height
+    int mirrored; // pixel blood: flipped left to right
 } tVR_splat;
+
+typedef struct tVR_blood_sprite {
+    int width; // 0 = not loaded
+    int height;
+    uint8_t* rgba;  // premultiplied, top row first
+    GLuint texture; // 0 = not uploaded yet
+    int dirty;      // new pixels to upload
+} tVR_blood_sprite;
 
 // clang-format off
 static const char* vertex_source =
@@ -237,6 +263,33 @@ static const char* fragment_source =
     "    float a = alpha * 0.93;\n"
     "    o_colour = vec4(colour * a, a);\n"
     "}\n";
+
+// Pixel blood: one sprite on a quad. u_rect centre x/y and half width/height of the unturned sprite
+// (0..1 of the quad's height, x scaled by u_aspect), u_turn cos/sin of its angle and the mirroring.
+static const char* sprite_vertex_source =
+    "#version 140\n"
+    "uniform vec4 u_rect;\n"
+    "uniform vec3 u_turn;\n"
+    "uniform float u_aspect;\n"
+    "out vec2 v_uv;\n"
+    "void main() {\n"
+    "    vec2 c = vec2(float(gl_VertexID & 1), float(gl_VertexID >> 1));\n"
+    "    v_uv = vec2(u_turn.z > 0.5 ? 1.0 - c.x : c.x, 1.0 - c.y);\n"
+    "    vec2 l = (c * 2.0 - 1.0) * u_rect.zw;\n"
+    "    vec2 r = vec2(u_turn.x * l.x - u_turn.y * l.y, u_turn.y * l.x + u_turn.x * l.y);\n"
+    "    vec2 p = vec2(u_rect.x + r.x / u_aspect, u_rect.y + r.y);\n"
+    "    gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);\n"
+    "}\n";
+
+static const char* sprite_fragment_source =
+    "#version 140\n"
+    "in vec2 v_uv;\n"
+    "out vec4 o_colour;\n"
+    "uniform sampler2D u_texture;\n"
+    "uniform float u_alpha;\n"
+    "void main() {\n"
+    "    o_colour = texture(u_texture, v_uv) * u_alpha;\n"
+    "}\n";
 // clang-format on
 
 static tVR_splat splats[VR_BLOOD_MAX_SPLATS];
@@ -249,6 +302,13 @@ static GLint uniform_b;
 static GLint uniform_c;
 static GLint uniform_d;
 static GLint uniform_p;
+static GLuint sprite_program;
+static GLint uniform_sprite_rect;
+static GLint uniform_sprite_turn;
+static GLint uniform_sprite_aspect;
+static GLint uniform_sprite_texture;
+static GLint uniform_sprite_alpha;
+static tVR_blood_sprite sprites[VR_BLOOD_SPRITE_COUNT];
 static float quad_aspect = 1.0f;
 static int view = VR_VIEW_CHASE;
 static float view_speed_kmh;
@@ -289,31 +349,47 @@ static GLuint VR_Blood_CompileShader(GLenum pType, const char* pSource) {
     return shader;
 }
 
-int VR_Blood_Init(void) {
+static GLuint VR_Blood_LinkProgram(const char* pVertex_source, const char* pFragment_source) {
     GLuint vertex_shader;
     GLuint fragment_shader;
+    GLuint linked;
     GLint ok;
     char log[1024];
-    const char* test;
 
-    vertex_shader = VR_Blood_CompileShader(GL_VERTEX_SHADER, vertex_source);
-    fragment_shader = VR_Blood_CompileShader(GL_FRAGMENT_SHADER, fragment_source);
+    vertex_shader = VR_Blood_CompileShader(GL_VERTEX_SHADER, pVertex_source);
+    fragment_shader = VR_Blood_CompileShader(GL_FRAGMENT_SHADER, pFragment_source);
     if (vertex_shader == 0 || fragment_shader == 0) {
+        if (vertex_shader != 0) {
+            glDeleteShader(vertex_shader);
+        }
+        if (fragment_shader != 0) {
+            glDeleteShader(fragment_shader);
+        }
         return 0;
     }
-    program = glCreateProgram();
-    glAttachShader(program, vertex_shader);
-    glAttachShader(program, fragment_shader);
-    glBindFragDataLocation(program, 0, "o_colour");
-    glLinkProgram(program);
+    linked = glCreateProgram();
+    glAttachShader(linked, vertex_shader);
+    glAttachShader(linked, fragment_shader);
+    glBindFragDataLocation(linked, 0, "o_colour");
+    glLinkProgram(linked);
     glDeleteShader(vertex_shader);
     glDeleteShader(fragment_shader);
-    glGetProgramiv(program, GL_LINK_STATUS, &ok);
+    glGetProgramiv(linked, GL_LINK_STATUS, &ok);
     if (!ok) {
-        glGetProgramInfoLog(program, sizeof(log), NULL, log);
+        glGetProgramInfoLog(linked, sizeof(log), NULL, log);
         LOG_WARN("Blood shader does not link: %s", log);
-        glDeleteProgram(program);
-        program = 0;
+        glDeleteProgram(linked);
+        return 0;
+    }
+    return linked;
+}
+
+int VR_Blood_Init(void) {
+    const char* test;
+    int i;
+
+    program = VR_Blood_LinkProgram(vertex_source, fragment_source);
+    if (program == 0) {
         return 0;
     }
     uniform_count = glGetUniformLocation(program, "u_count");
@@ -323,6 +399,20 @@ int VR_Blood_Init(void) {
     uniform_c = glGetUniformLocation(program, "u_c");
     uniform_d = glGetUniformLocation(program, "u_d");
     uniform_p = glGetUniformLocation(program, "u_p");
+    // Without the sprite shader, pixel blood falls back to the drawn splatters
+    sprite_program = VR_Blood_LinkProgram(sprite_vertex_source, sprite_fragment_source);
+    if (sprite_program != 0) {
+        uniform_sprite_rect = glGetUniformLocation(sprite_program, "u_rect");
+        uniform_sprite_turn = glGetUniformLocation(sprite_program, "u_turn");
+        uniform_sprite_aspect = glGetUniformLocation(sprite_program, "u_aspect");
+        uniform_sprite_texture = glGetUniformLocation(sprite_program, "u_texture");
+        uniform_sprite_alpha = glGetUniformLocation(sprite_program, "u_alpha");
+    }
+    // Sprites handed over before (or kept from an earlier session) are uploaded again
+    for (i = 0; i < VR_BLOOD_SPRITE_COUNT; i++) {
+        sprites[i].texture = 0;
+        sprites[i].dirty = sprites[i].width != 0;
+    }
     // The core profile draws nothing without a vertex array, even if no attributes are used
     glGenVertexArrays(1, &vertex_array);
 
@@ -333,6 +423,91 @@ int VR_Blood_Init(void) {
         LOG_INFO("Blood test: splatter every %.0f s at %.0f km/h", (double)VR_BLOOD_TEST_INTERVAL, (double)test_kmh);
     }
     return 1;
+}
+
+void VR_SetBloodSprite(const char* pName, br_pixelmap* pPixelmap, br_pixelmap* pPalette) {
+    tVR_blood_sprite* sprite;
+    br_colour* palette;
+    br_colour colour;
+    uint8_t* row;
+    uint8_t* out;
+    int index;
+    int i;
+    int x;
+    int y;
+
+    for (i = 0; i < VR_BLOOD_SPRITE_COUNT; i++) {
+        if (strcmp(sprite_names[i], pName) == 0) {
+            break;
+        }
+    }
+    if (i == VR_BLOOD_SPRITE_COUNT) {
+        return;
+    }
+    sprite = &sprites[i];
+    if (pPixelmap == NULL || pPixelmap->pixels == NULL || pPixelmap->type != BR_PMT_INDEX_8
+        || pPalette == NULL || pPalette->pixels == NULL || pPixelmap->width <= 0 || pPixelmap->height <= 0) {
+        LOG_WARN("Pixel blood: sprite %s cannot be used", pName);
+        return;
+    }
+    out = realloc(sprite->rgba, (size_t)pPixelmap->width * pPixelmap->height * 4);
+    if (out == NULL) {
+        return;
+    }
+    sprite->rgba = out;
+    sprite->width = pPixelmap->width;
+    sprite->height = pPixelmap->height;
+    palette = pPalette->pixels;
+    for (y = 0; y < pPixelmap->height; y++) {
+        row = (uint8_t*)pPixelmap->pixels + y * pPixelmap->row_bytes;
+        for (x = 0; x < pPixelmap->width; x++) {
+            // Colour 0 is transparent
+            index = row[x];
+            colour = palette[index];
+            out[0] = index == 0 ? 0 : BR_RED(colour);
+            out[1] = index == 0 ? 0 : BR_GRN(colour);
+            out[2] = index == 0 ? 0 : BR_BLU(colour);
+            out[3] = index == 0 ? 0 : 255;
+            out += 4;
+        }
+    }
+    sprite->dirty = 1;
+}
+
+// Pixel blood: a sprite for a new splatter, mostly a common one, now and then a rare one; -1 when
+// there are none
+static int VR_Blood_ChooseSprite(void) {
+    int rare;
+    int first;
+    int end;
+    int loaded;
+    int pick;
+    int pass;
+    int i;
+
+    if (sprite_program == 0) {
+        return -1;
+    }
+    rare = VR_Blood_Random() < VR_BLOOD_RARE_CHANCE;
+    // Only among the loaded ones; the other group if none of this one is
+    for (pass = 0; pass < 2; pass++, rare = !rare) {
+        first = rare ? VR_BLOOD_COMMON_SPRITES : 0;
+        end = rare ? VR_BLOOD_SPRITE_COUNT : VR_BLOOD_COMMON_SPRITES;
+        loaded = 0;
+        for (i = first; i < end; i++) {
+            loaded += sprites[i].width != 0;
+        }
+        if (loaded == 0) {
+            continue;
+        }
+        pick = (int)(VR_Blood_Random() * loaded);
+        for (i = first; i < end; i++) {
+            if (sprites[i].width != 0 && pick-- == 0) {
+                return i;
+            }
+        }
+    }
+    return -1;
 }
 
 // Shape of a new splatter: mostly small ones, a few big ones, some only a spray of droplets
@@ -364,6 +539,20 @@ static void VR_Blood_Shape(tVR_splat* pSplat, float pOver_kmh) {
     } else {
         pSplat->drips = 3.0f;
     }
+}
+
+// Pixel blood: one sprite pixel is 0.45 to 0.75 % of the height, up to half as big again when faster.
+// Turned at any angle and mirrored at random; no drips, droplets or trail.
+static void VR_Blood_ShapeSprite(tVR_splat* pSplat, float pOver_kmh) {
+    tVR_blood_sprite* sprite = &sprites[pSplat->sprite];
+
+    pSplat->pixel = (0.0045f + 0.003f * VR_Blood_Random()) * (1.0f + 0.5f * fminf(pOver_kmh / 150.0f, 1.0f));
+    pSplat->radius = 0.5f * (float)(sprite->width > sprite->height ? sprite->width : sprite->height) * pSplat->pixel;
+    pSplat->mirrored = VR_Blood_Random() < 0.5f;
+    pSplat->opacity = 1.0f;
+    pSplat->drips = 0.0f;
+    pSplat->satellites = 0.0f;
+    pSplat->ragged = 0.5f;
 }
 
 static void VR_Blood_Spawn(float pSpeed_kmh) {
@@ -421,8 +610,13 @@ static void VR_Blood_Spawn(float pSpeed_kmh) {
         splat->y = y;
         splat->age = -0.15f * VR_Blood_Random();
         VR_Blood_Shape(splat, over);
+        splat->sprite = harness_game_config.vr_blood_pixel ? VR_Blood_ChooseSprite() : -1;
+        if (splat->sprite >= 0) {
+            VR_Blood_ShapeSprite(splat, over);
+        }
         if (view == VR_VIEW_FAR_CHASE) {
             splat->radius *= VR_BLOOD_FAR_SIZE;
+            splat->pixel *= VR_BLOOD_FAR_SIZE;
         }
         splat->windscreen = view == VR_VIEW_COCKPIT;
         splat->blob_x = x;
@@ -566,6 +760,65 @@ int VR_Blood_Active(void) {
     return 0;
 }
 
+// Pixel blood: uploads sprites that are new, then draws each splatter made of one as a turned quad,
+// blended over what is there already (premultiplied). Texture unit 0 is active.
+static void VR_Blood_DrawSprites(float pAspect) {
+    tVR_blood_sprite* sprite;
+    tVR_splat* splat;
+    float x;
+    float y;
+    float fade;
+    int i;
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    for (i = 0; i < VR_BLOOD_SPRITE_COUNT; i++) {
+        sprite = &sprites[i];
+        if (!sprite->dirty) {
+            continue;
+        }
+        if (sprite->texture == 0) {
+            glGenTextures(1, &sprite->texture);
+        }
+        glBindTexture(GL_TEXTURE_2D, sprite->texture);
+        // Nearest: the big pixels stay sharp
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, sprite->width, sprite->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, sprite->rgba);
+        sprite->dirty = 0;
+    }
+
+    glEnable(GL_BLEND);
+    glBlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+    glUseProgram(sprite_program);
+    glUniform1f(uniform_sprite_aspect, pAspect);
+    glUniform1i(uniform_sprite_texture, 0);
+    for (i = 0; i < VR_BLOOD_MAX_SPLATS; i++) {
+        splat = &splats[i];
+        if (splat->radius == 0.0f || splat->sprite < 0 || splat->age < 0.0f) {
+            continue;
+        }
+        // On the windscreen it goes where the airstream pushed it, until it is over the edge
+        if (splat->windscreen && splat->mass == 0.0f) {
+            continue;
+        }
+        sprite = &sprites[splat->sprite];
+        if (sprite->texture == 0) {
+            continue;
+        }
+        x = splat->windscreen ? splat->blob_x : splat->x;
+        y = splat->windscreen ? splat->blob_y : splat->y;
+        fade = 1.0f - VR_Blood_Clamp((splat->age - VR_BLOOD_HOLD_SECONDS) / VR_BLOOD_FADE_SECONDS, 0.0f, 1.0f);
+        glBindTexture(GL_TEXTURE_2D, sprite->texture);
+        glUniform4f(uniform_sprite_rect, x, y, 0.5f * sprite->width * splat->pixel, 0.5f * sprite->height * splat->pixel);
+        glUniform3f(uniform_sprite_turn, cosf(splat->angle), sinf(splat->angle), splat->mirrored ? 1.0f : 0.0f);
+        glUniform1f(uniform_sprite_alpha, fade * splat->opacity);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    }
+}
+
 void VR_Blood_Draw(int pWidth, int pHeight, float pAspect) {
     static GLfloat a[VR_BLOOD_MAX_SPLATS * 4];
     static GLfloat b[VR_BLOOD_MAX_SPLATS * 4];
@@ -579,7 +832,17 @@ void VR_Blood_Draw(int pWidth, int pHeight, float pAspect) {
     GLboolean old_blend;
     GLboolean old_cull_face;
     GLboolean old_stencil_test;
+    GLint old_active_texture;
+    GLint old_texture;
+    GLint old_unpack_alignment;
+    GLint old_blend_src_rgb;
+    GLint old_blend_dst_rgb;
+    GLint old_blend_src_alpha;
+    GLint old_blend_dst_alpha;
+    GLint old_blend_equation_rgb;
+    GLint old_blend_equation_alpha;
     int count = 0;
+    int sprite_count = 0;
     int i;
     int k;
 
@@ -592,6 +855,10 @@ void VR_Blood_Draw(int pWidth, int pHeight, float pAspect) {
     for (i = 0; i < VR_BLOOD_MAX_SPLATS; i++) {
         splat = &splats[i];
         if (splat->radius == 0.0f) {
+            continue;
+        }
+        if (splat->sprite >= 0) {
+            sprite_count++;
             continue;
         }
         a[count * 4 + 0] = splat->x;
@@ -616,11 +883,21 @@ void VR_Blood_Draw(int pWidth, int pHeight, float pAspect) {
         }
         count++;
     }
-    if (count == 0) {
+    if (count == 0 && sprite_count == 0) {
         return;
     }
 
     // glrend keeps its own GL state; leave everything as it was
+    glGetIntegerv(GL_ACTIVE_TEXTURE, &old_active_texture);
+    glActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &old_texture);
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &old_unpack_alignment);
+    glGetIntegerv(GL_BLEND_SRC_RGB, &old_blend_src_rgb);
+    glGetIntegerv(GL_BLEND_DST_RGB, &old_blend_dst_rgb);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &old_blend_src_alpha);
+    glGetIntegerv(GL_BLEND_DST_ALPHA, &old_blend_dst_alpha);
+    glGetIntegerv(GL_BLEND_EQUATION_RGB, &old_blend_equation_rgb);
+    glGetIntegerv(GL_BLEND_EQUATION_ALPHA, &old_blend_equation_alpha);
     glGetIntegerv(GL_CURRENT_PROGRAM, &old_program);
     glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &old_vertex_array);
     old_depth_test = glIsEnabled(GL_DEPTH_TEST);
@@ -633,16 +910,22 @@ void VR_Blood_Draw(int pWidth, int pHeight, float pAspect) {
     glDisable(GL_CULL_FACE);
     glDisable(GL_STENCIL_TEST);
     glViewport(0, 0, pWidth, pHeight);
-    glUseProgram(program);
     glBindVertexArray(vertex_array);
-    glUniform1i(uniform_count, count);
-    glUniform1f(uniform_aspect, pAspect);
-    glUniform4fv(uniform_a, count, a);
-    glUniform4fv(uniform_b, count, b);
-    glUniform4fv(uniform_c, count, c);
-    glUniform4fv(uniform_d, count, d);
-    glUniform4fv(uniform_p, count * VR_BLOOD_PATH_POINTS / 2, p);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    // The drawn splatters cover the whole quad in one pass, so they go first
+    if (count != 0) {
+        glUseProgram(program);
+        glUniform1i(uniform_count, count);
+        glUniform1f(uniform_aspect, pAspect);
+        glUniform4fv(uniform_a, count, a);
+        glUniform4fv(uniform_b, count, b);
+        glUniform4fv(uniform_c, count, c);
+        glUniform4fv(uniform_d, count, d);
+        glUniform4fv(uniform_p, count * VR_BLOOD_PATH_POINTS / 2, p);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+    }
+    if (sprite_count != 0) {
+        VR_Blood_DrawSprites(pAspect);
+    }
 
     glBindVertexArray(old_vertex_array);
     glUseProgram(old_program);
@@ -658,6 +941,11 @@ void VR_Blood_Draw(int pWidth, int pHeight, float pAspect) {
     if (old_stencil_test) {
         glEnable(GL_STENCIL_TEST);
     }
+    glBlendFuncSeparate(old_blend_src_rgb, old_blend_dst_rgb, old_blend_src_alpha, old_blend_dst_alpha);
+    glBlendEquationSeparate(old_blend_equation_rgb, old_blend_equation_alpha);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, old_unpack_alignment);
+    glBindTexture(GL_TEXTURE_2D, old_texture);
+    glActiveTexture(old_active_texture);
 }
 
 void VR_Blood_Shutdown(void) {
@@ -666,6 +954,12 @@ void VR_Blood_Shutdown(void) {
     // The GL objects belong to the context, which may already be gone; only forget them
     program = 0;
     vertex_array = 0;
+    sprite_program = 0;
+    // The sprites' pixels stay, they are uploaded again by the next session
+    for (i = 0; i < VR_BLOOD_SPRITE_COUNT; i++) {
+        sprites[i].texture = 0;
+        sprites[i].dirty = sprites[i].width != 0;
+    }
     for (i = 0; i < VR_BLOOD_MAX_SPLATS; i++) {
         splats[i].radius = 0.0f;
     }

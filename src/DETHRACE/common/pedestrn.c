@@ -375,6 +375,11 @@ void InitPedGibs(void) {
             } else {
                 the_pix = LoadPixelmap(gPed_gib_names[i][j]);
             }
+#ifdef DETHRACE_VR
+            // VR: the same sprites can splatter onto the lens ([VR] BloodPixel); always by the
+            // normal name, also when the sausage eater mode loaded the G... ones
+            VR_SetBloodSprite(gPed_gib_names[i][j], the_pix, gRender_palette);
+#endif
             BrMapAdd(the_pix);
             gPed_gib_materials[i].count = gPed_size_counts[i];
             gPed_gib_materials[i].materials[j] = BrMaterialAllocate(NULL);

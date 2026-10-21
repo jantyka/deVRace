@@ -146,6 +146,8 @@ typedef struct tHarness_game_config {
     float vr_hud_width;
     // VR: blood on the lens when running over pedestrians at speed
     int vr_blood;
+    // VR: the blood is the game's own gib sprites instead of the drawn splatters
+    int vr_blood_pixel;
     // VR: all graphics options at their best on each start
     int vr_max_detail;
     // VR: rear view mirror in the cockpit view, below the race timer

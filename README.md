@@ -20,7 +20,7 @@ The original Dethrace README is in [docs/README.dethrace.md](docs/README.dethrac
 - **Menus and HUD on a panel** in front of you (OpenXR quad layer). In the race the HUD floats over the 3D view; every HUD element can be switched on and off.
 - **Far chase camera** as in other racing games: the view key cycles cockpit, chase and far chase view (`FarChase`).
 - **Recenter** the view with the gamepad (right stick press), in the race and in the menus, or from SteamVR's menu.
-- **Blood on the lens** when you run over pedestrians at speed: drips run down the lens in the chase views (smaller and fewer in the far one); in the cockpit the airstream pushes it up the windscreen and to the outside of a turn. Moving the mouse too fast in the menus splatters some too.
+- **Blood on the lens** when you run over pedestrians at speed: drips run down the lens in the chase views (smaller and fewer in the far one); in the cockpit the airstream pushes it up the windscreen and to the outside of a turn. Moving the mouse too fast in the menus splatters some too. With pixel blood on (`PIXEL BLOOD` in the VR options, `[VR] BloodPixel`), the splatters are the game's own gib sprites instead, turned at random, with their big pixels and without drips or trails.
 - **Rear view mirror** in the cockpit view, as a rectangle right below the race timer (`Mirror`).
 - **Graphics options at their best** on each start (`MaxDetail`).
 - **VR options** in the game's options screen (VR button): switch the blood on the lens, the options from the slop pack (below) and the post effects (below) on and off, and pick the effect; saved to `dethrace.ini`.
@@ -181,6 +181,7 @@ HudInstruments = 1
 HudPowerups = 1
 HideBorrowedBonnet = 1 ; hide bonnets a car borrows from another car in the cockpit view
 Blood = 1          ; blood may splatter onto the lens when you run over pedestrians at over 70 km/h
+BloodPixel = 0     ; the blood is made of the game's gib sprites instead of drawn splatters
 Mirror = 1         ; rear view mirror in the cockpit view, below the race timer
 MaxDetail = 1      ; set every graphics option to its best on each start
 FarChase = 1.8     ; far chase camera: distance as a multiple of the normal one (0 = no far chase camera)

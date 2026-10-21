@@ -43,6 +43,11 @@ void VR_GetEyeFrustum(int pEye, br_scalar* pLeft, br_scalar* pRight, br_scalar* 
 // (50 % chance, rising to 90 % at 100 km/h); the faster, the more splatters ([VR] Blood).
 void VR_SplatterBlood(float pSpeed_kmh);
 
+// Hands one of the game's gib sprites (8-bit pixelmap, pName as in gPed_gib_names, e.g.
+// "SPLAT1.PIX") with the palette it is drawn with to the blood on the lens. With [VR] BloodPixel the
+// splatters are made of these sprites; the ones not used for that are ignored. The pixels are copied.
+void VR_SetBloodSprite(const char* pName, br_pixelmap* pPixelmap, br_pixelmap* pPalette);
+
 // Call from the menus' mouse cursor with its speed in screen sizes per second and the time since the
 // last call: moving the mouse too fast splatters blood onto the lens as well ([VR] Blood)
 void VR_SplatterBloodMenu(float pScreens_per_second, float pSeconds);
