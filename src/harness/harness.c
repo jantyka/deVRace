@@ -302,16 +302,16 @@ int Harness_Init(int* argc, char* argv[]) {
 #endif
     // Round wheel models ([Slop] RoundWheels)
     harness_game_config.round_wheels = 0;
-    // Draw distance of geometry, opponents, pedestrians and powerups ([Slop] ExtendDrawDistance) and
-    // opponent cars always at full detail, 10 times the view distance ([Slop] OpponentMaxDetail):
-    // on in deVRace
+    // Draw distance of geometry, opponents, pedestrians and powerups ([Slop] ExtendDrawDistance): on
+    // in deVRace
 #ifdef DETHRACE_VR
     harness_game_config.extend_draw_distance = 1;
-    harness_game_config.opponent_max_detail = 1;
 #else
     harness_game_config.extend_draw_distance = 0;
-    harness_game_config.opponent_max_detail = 0;
 #endif
+    // Opponent cars always at full detail, 10 times the view distance ([Slop] OpponentMaxDetail):
+    // off, with all opponents close at the start of a race the headset drops below 144 Hz
+    harness_game_config.opponent_max_detail = 0;
     // No post effect; sharpen once it is switched on ([Graphics] Shader, PostEffect)
     harness_game_config.post_shader = 0;
     harness_game_config.post_effect = eHarness_post_effect_sharpen;
