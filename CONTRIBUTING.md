@@ -1,3 +1,52 @@
+# Contributing to deVRace
+
+deVRace is a small project, made by one person with one headset (a Valve Index on Linux). Help is very welcome, and there are three things it needs most.
+
+## Testers wanted
+
+If you have a VR headset and Linux, please try it and tell me how it went, good or bad. Especially welcome are headsets other than the Index, other GPUs (NVIDIA, Intel), other OpenXR runtimes (SteamVR, Monado, WiVRn, ALVR) and other desktops on Wayland.
+
+Open an [issue](https://github.com/jantyka/deVRace/issues) and include:
+
+- the headset, the OpenXR runtime and its version
+- the distribution, the desktop (Wayland compositor), the GPU and the driver version
+- the deVRace version (the first lines of the game's output) and your `dethrace.ini` if you changed it
+- what happened and how to get there; start the game from a terminal and attach its output
+
+Feature requests are welcome too.
+
+## Ports wanted: Windows and Meta Quest
+
+deVRace runs on Linux only for now. If you would like to bring it to **Windows** (PC VR) or to the **Meta Quest** (standalone, Android), I would love that, and I will gladly invite you to this repository as a collaborator, so that the port can live here instead of in a separate fork. Just open an issue and say hello.
+
+Where to start:
+
+- The VR layer is plain OpenXR in `src/harness/vr/`. The part tied to the platform is the graphics binding: `vr_gfx.h` with its EGL implementation `vr_gfx_egl.c` (Wayland). A Windows port needs a WGL one (`XR_KHR_opengl_enable` with the Win32 binding), plus the build: `src/harness/CMakeLists.txt` only allows `DETHRACE_VR` on Linux so far.
+- A Quest port needs an Android build, OpenGL ES for the renderer and the VR layer (`XR_KHR_opengl_es_enable`), and controllers as input, since there is no keyboard.
+- [docs/PORTING.md](docs/PORTING.md) explains how Dethrace is split into the original game code and the `harness` for platform code.
+
+## AI assistance is explicitly allowed
+
+deVRace itself was written with a lot of AI help, and you are welcome to use it as well. You are responsible for what you submit, though: build it, test it, and say in the pull request what you tested and on which system.
+
+## The 2D game: Dethrace
+
+deVRace is a fork of [Dethrace](https://github.com/dethrace-labs/dethrace). Bugs and improvements of the game itself, not of VR (game logic, the 2D/monitor version, the renderer, new platforms for the flat game), belong there: please report and contribute them to [dethrace-labs/dethrace](https://github.com/dethrace-labs/dethrace) and its [Discord](https://discord.gg/f5StsuP). deVRace merges their work regularly, so it reaches the VR version as well.
+
+## Code here
+
+Code in deVRace follows Dethrace's guidelines below (C only, `clang-format`, platform code in `src/harness`). In addition:
+
+- VR code stays behind the CMake option `DETHRACE_VR` and `#ifdef DETHRACE_VR`; the build without it has to build and run like Dethrace.
+- Changes to the original game code in `src/DETHRACE` only at clearly marked places (`// VR: ...`).
+- One change per commit; changes that are useful without VR in commits of their own, so that they can go to Dethrace as well.
+- No game data in the repository, ever.
+- By contributing you agree to license your contribution under the [GPL v3](LICENSE), like Dethrace.
+
+The rest of this page is Dethrace's own guide.
+
+---
+
 # Dethrace Contributing Guidelines
 Thank you for investing your time in contributing to our project! Contributions can be in the form of bug reports or code
 additions / fixes. Please read this document to learn how to contribute as effectively as possible. If you have any

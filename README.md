@@ -2,6 +2,8 @@
 
 A Linux VR-Port of dethrace. I always wanted to play my childhood game in VR so i vibecoded it, dont get mad, i primary did it for me and out of curiosity. A reason why this is Wayland only. Tested with valve index, cuz thats what i have.... If you want to contribute feel free to make a windows or android fork, give me some feature requests or maybe find some bugs. This will be an ongoing project.
 
+Testers and people who would like to port it to Windows or the Meta Quest are very welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ---
 
 deVRace is a fork of [Dethrace](https://github.com/dethrace-labs/dethrace), the reimplementation of the 1997 game [Carmageddon](https://en.wikipedia.org/wiki/Carmageddon). It adds a VR mode through [OpenXR](https://www.khronos.org/openxr/), a gamepad with force feedback, and a few options around them. Without the VR build option it builds and runs like Dethrace.
