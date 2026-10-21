@@ -12,6 +12,7 @@
 // VR_DUMP_MAX_FRAMES times. Frames without game images (menus) are not counted.
 
 #include "vr.h"
+#include "../gl_util.h"
 #include "../postfx/postfx.h"
 #include "vr_blood.h"
 #include "vr_gfx.h"
@@ -113,15 +114,6 @@ static int blood_ready;
 static int blood_dump_count;
 
 // GL state the OpenXR layer changes while drawing into a swapchain image
-typedef struct tVR_gl_state {
-    GLint draw_framebuffer;
-    GLint read_framebuffer;
-    GLint viewport[4];
-    GLfloat clear_colour[4];
-    GLboolean colour_mask[4];
-    GLboolean scissor;
-} tVR_gl_state;
-
 static int debug_enabled;
 static const char* dump_dir;
 static int dump_interval;
@@ -569,8 +561,8 @@ static void VR_DumpImage(const char* pName, int pWidth, int pHeight) {
 }
 
 // Acquires the next image of the swapchain and binds it for drawing, saving the GL state glrend
-// had (glrend keeps its own GL state; everything is left as it was by VR_EndSwapchainImage)
-static int VR_BeginSwapchainImage(tVR_eye_swapchain* pSwapchain, tVR_gl_state* pState) {
+// had and setting a plain one (glrend keeps its own GL state; VR_EndSwapchainImage restores it)
+static int VR_BeginSwapchainImage(tVR_eye_swapchain* pSwapchain, tGL_util_state* pState) {
     XrSwapchainImageAcquireInfo acquire_info = { .type = XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO };
     XrSwapchainImageWaitInfo wait_info = { .type = XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
     uint32_t image_index;
@@ -583,34 +575,20 @@ static int VR_BeginSwapchainImage(tVR_eye_swapchain* pSwapchain, tVR_gl_state* p
         return 0;
     }
 
-    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &pState->draw_framebuffer);
-    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &pState->read_framebuffer);
-    glGetIntegerv(GL_VIEWPORT, pState->viewport);
-    glGetFloatv(GL_COLOR_CLEAR_VALUE, pState->clear_colour);
-    glGetBooleanv(GL_COLOR_WRITEMASK, pState->colour_mask);
-    pState->scissor = glIsEnabled(GL_SCISSOR_TEST);
-
+    GLUtil_SaveState(pState);
+    GLUtil_PlainState();
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, eye_framebuffer);
     glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pSwapchain->images[image_index].image, 0);
     glViewport(0, 0, pSwapchain->width, pSwapchain->height);
-    glDisable(GL_SCISSOR_TEST);
-    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     return 1;
 }
 
 // Restores the GL state and hands the image back to the runtime
-static int VR_EndSwapchainImage(tVR_eye_swapchain* pSwapchain, const tVR_gl_state* pState) {
+static int VR_EndSwapchainImage(tVR_eye_swapchain* pSwapchain, const tGL_util_state* pState) {
     XrSwapchainImageReleaseInfo release_info = { .type = XR_TYPE_SWAPCHAIN_IMAGE_RELEASE_INFO };
 
     glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, 0, 0);
-    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, pState->draw_framebuffer);
-    glBindFramebuffer(GL_READ_FRAMEBUFFER, pState->read_framebuffer);
-    glViewport(pState->viewport[0], pState->viewport[1], pState->viewport[2], pState->viewport[3]);
-    glClearColor(pState->clear_colour[0], pState->clear_colour[1], pState->clear_colour[2], pState->clear_colour[3]);
-    glColorMask(pState->colour_mask[0], pState->colour_mask[1], pState->colour_mask[2], pState->colour_mask[3]);
-    if (pState->scissor) {
-        glEnable(GL_SCISSOR_TEST);
-    }
+    GLUtil_RestoreState(pState);
 
     return VR_Check(xrReleaseSwapchainImage(pSwapchain->handle, &release_info), "xrReleaseSwapchainImage");
 }
@@ -619,7 +597,7 @@ static int VR_EndSwapchainImage(tVR_eye_swapchain* pSwapchain, const tVR_gl_stat
 // pEffect: post effect to draw it with (pDepth_texture: its depth buffer), -1 for a plain copy.
 // pDump_name: written as PPM when dumping is due, NULL for never.
 static int VR_CopyToSwapchain(tVR_eye_swapchain* pSwapchain, GLuint pTexture, int pEffect, GLuint pDepth_texture, const char* pDump_name) {
-    tVR_gl_state state;
+    tGL_util_state state;
 
     if (!VR_BeginSwapchainImage(pSwapchain, &state)) {
         return 0;
@@ -727,7 +705,7 @@ static int VR_RenderMirror(XrCompositionLayerQuad* pLayer) {
 
 // Blood quad fixed to the head, a little larger than the field of view of both eyes
 static int VR_RenderBlood(XrCompositionLayerQuad* pLayer) {
-    tVR_gl_state state;
+    tGL_util_state state;
     float half_width = 0.0f;
     float half_height = 0.0f;
     float aspect;

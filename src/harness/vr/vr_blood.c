@@ -17,6 +17,7 @@
 // been run over at that speed (without the random chance), also in the menus.
 
 #include "vr_blood.h"
+#include "../gl_util.h"
 
 #include "include/harness/config.h"
 #include "include/harness/trace.h"
@@ -327,68 +328,30 @@ static float VR_Blood_Random(void) {
     return (random_state >> 8) / 16777216.0f;
 }
 
+// Links a program from two sources; 0 if it cannot be built
+static GLuint VR_Blood_BuildProgram(const char* pVertex_source, const char* pFragment_source, const char* pName) {
+    return GLUtil_LinkProgram(GLUtil_CompileShader(GL_VERTEX_SHADER, pVertex_source, pName),
+        GLUtil_CompileShader(GL_FRAGMENT_SHADER, pFragment_source, pName), pName);
+}
+
+// The GL objects are gone with the context: the sprites are uploaded again on the next draw
+static void VR_Blood_ForgetTextures(void) {
+    int i;
+
+    for (i = 0; i < VR_BLOOD_SPRITE_COUNT; i++) {
+        sprites[i].texture = 0;
+        sprites[i].dirty = sprites[i].width != 0;
+    }
+}
+
 static float VR_Blood_Clamp(float pValue, float pMin, float pMax) {
     return fminf(fmaxf(pValue, pMin), pMax);
 }
 
-static GLuint VR_Blood_CompileShader(GLenum pType, const char* pSource) {
-    GLuint shader;
-    GLint ok;
-    char log[1024];
-
-    shader = glCreateShader(pType);
-    glShaderSource(shader, 1, &pSource, NULL);
-    glCompileShader(shader);
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
-    if (!ok) {
-        glGetShaderInfoLog(shader, sizeof(log), NULL, log);
-        LOG_WARN("Blood shader does not compile: %s", log);
-        glDeleteShader(shader);
-        return 0;
-    }
-    return shader;
-}
-
-static GLuint VR_Blood_LinkProgram(const char* pVertex_source, const char* pFragment_source) {
-    GLuint vertex_shader;
-    GLuint fragment_shader;
-    GLuint linked;
-    GLint ok;
-    char log[1024];
-
-    vertex_shader = VR_Blood_CompileShader(GL_VERTEX_SHADER, pVertex_source);
-    fragment_shader = VR_Blood_CompileShader(GL_FRAGMENT_SHADER, pFragment_source);
-    if (vertex_shader == 0 || fragment_shader == 0) {
-        if (vertex_shader != 0) {
-            glDeleteShader(vertex_shader);
-        }
-        if (fragment_shader != 0) {
-            glDeleteShader(fragment_shader);
-        }
-        return 0;
-    }
-    linked = glCreateProgram();
-    glAttachShader(linked, vertex_shader);
-    glAttachShader(linked, fragment_shader);
-    glBindFragDataLocation(linked, 0, "o_colour");
-    glLinkProgram(linked);
-    glDeleteShader(vertex_shader);
-    glDeleteShader(fragment_shader);
-    glGetProgramiv(linked, GL_LINK_STATUS, &ok);
-    if (!ok) {
-        glGetProgramInfoLog(linked, sizeof(log), NULL, log);
-        LOG_WARN("Blood shader does not link: %s", log);
-        glDeleteProgram(linked);
-        return 0;
-    }
-    return linked;
-}
-
 int VR_Blood_Init(void) {
     const char* test;
-    int i;
 
-    program = VR_Blood_LinkProgram(vertex_source, fragment_source);
+    program = VR_Blood_BuildProgram(vertex_source, fragment_source, "Blood shader");
     if (program == 0) {
         return 0;
     }
@@ -400,7 +363,7 @@ int VR_Blood_Init(void) {
     uniform_d = glGetUniformLocation(program, "u_d");
     uniform_p = glGetUniformLocation(program, "u_p");
     // Without the sprite shader, pixel blood falls back to the drawn splatters
-    sprite_program = VR_Blood_LinkProgram(sprite_vertex_source, sprite_fragment_source);
+    sprite_program = VR_Blood_BuildProgram(sprite_vertex_source, sprite_fragment_source, "Pixel blood shader");
     if (sprite_program != 0) {
         uniform_sprite_rect = glGetUniformLocation(sprite_program, "u_rect");
         uniform_sprite_turn = glGetUniformLocation(sprite_program, "u_turn");
@@ -409,10 +372,7 @@ int VR_Blood_Init(void) {
         uniform_sprite_alpha = glGetUniformLocation(sprite_program, "u_alpha");
     }
     // Sprites handed over before (or kept from an earlier session) are uploaded again
-    for (i = 0; i < VR_BLOOD_SPRITE_COUNT; i++) {
-        sprites[i].texture = 0;
-        sprites[i].dirty = sprites[i].width != 0;
-    }
+    VR_Blood_ForgetTextures();
     // The core profile draws nothing without a vertex array, even if no attributes are used
     glGenVertexArrays(1, &vertex_array);
 
@@ -826,21 +786,6 @@ void VR_Blood_Draw(int pWidth, int pHeight, float pAspect) {
     static GLfloat d[VR_BLOOD_MAX_SPLATS * 4];
     static GLfloat p[VR_BLOOD_MAX_SPLATS * VR_BLOOD_PATH_POINTS * 2];
     tVR_splat* splat;
-    GLint old_program;
-    GLint old_vertex_array;
-    GLboolean old_depth_test;
-    GLboolean old_blend;
-    GLboolean old_cull_face;
-    GLboolean old_stencil_test;
-    GLint old_active_texture;
-    GLint old_texture;
-    GLint old_unpack_alignment;
-    GLint old_blend_src_rgb;
-    GLint old_blend_dst_rgb;
-    GLint old_blend_src_alpha;
-    GLint old_blend_dst_alpha;
-    GLint old_blend_equation_rgb;
-    GLint old_blend_equation_alpha;
     int count = 0;
     int sprite_count = 0;
     int i;
@@ -887,28 +832,9 @@ void VR_Blood_Draw(int pWidth, int pHeight, float pAspect) {
         return;
     }
 
-    // glrend keeps its own GL state; leave everything as it was
-    glGetIntegerv(GL_ACTIVE_TEXTURE, &old_active_texture);
+    // The caller saved the GL state and restores it (VR_BeginSwapchainImage in vr.c)
+    GLUtil_PlainState();
     glActiveTexture(GL_TEXTURE0);
-    glGetIntegerv(GL_TEXTURE_BINDING_2D, &old_texture);
-    glGetIntegerv(GL_UNPACK_ALIGNMENT, &old_unpack_alignment);
-    glGetIntegerv(GL_BLEND_SRC_RGB, &old_blend_src_rgb);
-    glGetIntegerv(GL_BLEND_DST_RGB, &old_blend_dst_rgb);
-    glGetIntegerv(GL_BLEND_SRC_ALPHA, &old_blend_src_alpha);
-    glGetIntegerv(GL_BLEND_DST_ALPHA, &old_blend_dst_alpha);
-    glGetIntegerv(GL_BLEND_EQUATION_RGB, &old_blend_equation_rgb);
-    glGetIntegerv(GL_BLEND_EQUATION_ALPHA, &old_blend_equation_alpha);
-    glGetIntegerv(GL_CURRENT_PROGRAM, &old_program);
-    glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &old_vertex_array);
-    old_depth_test = glIsEnabled(GL_DEPTH_TEST);
-    old_blend = glIsEnabled(GL_BLEND);
-    old_cull_face = glIsEnabled(GL_CULL_FACE);
-    old_stencil_test = glIsEnabled(GL_STENCIL_TEST);
-
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_BLEND);
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_STENCIL_TEST);
     glViewport(0, 0, pWidth, pHeight);
     glBindVertexArray(vertex_array);
     // The drawn splatters cover the whole quad in one pass, so they go first
@@ -926,26 +852,6 @@ void VR_Blood_Draw(int pWidth, int pHeight, float pAspect) {
     if (sprite_count != 0) {
         VR_Blood_DrawSprites(pAspect);
     }
-
-    glBindVertexArray(old_vertex_array);
-    glUseProgram(old_program);
-    if (old_depth_test) {
-        glEnable(GL_DEPTH_TEST);
-    }
-    if (old_blend) {
-        glEnable(GL_BLEND);
-    }
-    if (old_cull_face) {
-        glEnable(GL_CULL_FACE);
-    }
-    if (old_stencil_test) {
-        glEnable(GL_STENCIL_TEST);
-    }
-    glBlendFuncSeparate(old_blend_src_rgb, old_blend_dst_rgb, old_blend_src_alpha, old_blend_dst_alpha);
-    glBlendEquationSeparate(old_blend_equation_rgb, old_blend_equation_alpha);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, old_unpack_alignment);
-    glBindTexture(GL_TEXTURE_2D, old_texture);
-    glActiveTexture(old_active_texture);
 }
 
 void VR_Blood_Shutdown(void) {
@@ -956,10 +862,7 @@ void VR_Blood_Shutdown(void) {
     vertex_array = 0;
     sprite_program = 0;
     // The sprites' pixels stay, they are uploaded again by the next session
-    for (i = 0; i < VR_BLOOD_SPRITE_COUNT; i++) {
-        sprites[i].texture = 0;
-        sprites[i].dirty = sprites[i].width != 0;
-    }
+    VR_Blood_ForgetTextures();
     for (i = 0; i < VR_BLOOD_MAX_SPLATS; i++) {
         splats[i].radius = 0.0f;
     }

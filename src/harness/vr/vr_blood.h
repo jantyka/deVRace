@@ -17,7 +17,8 @@ void VR_Blood_Advance(float pSeconds);
 int VR_Blood_Active(void);
 
 // Draws all splatters into the framebuffer bound for drawing (pWidth x pHeight pixels), with
-// premultiplied alpha. pAspect is width / height of the quad in the headset.
+// premultiplied alpha. pAspect is width / height of the quad in the headset. Changes the GL state:
+// the caller saves and restores it.
 void VR_Blood_Draw(int pWidth, int pHeight, float pAspect);
 
 void VR_Blood_Shutdown(void);
