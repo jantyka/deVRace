@@ -355,8 +355,8 @@ int Harness_Init(int* argc, char* argv[]) {
     harness_game_config.vr_hud_width = 1.6f;
     // VR: blood on the lens on
     harness_game_config.vr_blood = 1;
-    // VR: drawn splatters, not the game's sprites
-    harness_game_config.vr_blood_pixel = 0;
+    // VR: the blood is made of the game's gib sprites
+    harness_game_config.vr_blood_pixel = 1;
     // VR: graphics options at their best on each start
     harness_game_config.vr_max_detail = 1;
     // VR: rear view mirror in the cockpit view on

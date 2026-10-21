@@ -181,7 +181,7 @@ HudInstruments = 1
 HudPowerups = 1
 HideBorrowedBonnet = 1 ; hide bonnets a car borrows from another car in the cockpit view
 Blood = 1          ; blood may splatter onto the lens when you run over pedestrians at over 70 km/h
-BloodPixel = 0     ; the blood is made of the game's gib sprites instead of drawn splatters
+BloodPixel = 1     ; the blood is made of the game's gib sprites instead of drawn splatters
 Mirror = 1         ; rear view mirror in the cockpit view, below the race timer
 MaxDetail = 1      ; set every graphics option to its best on each start
 FarChase = 1.8     ; far chase camera: distance as a multiple of the normal one (0 = no far chase camera)
