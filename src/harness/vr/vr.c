@@ -641,32 +641,34 @@ static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view)
     return 1;
 }
 
+// A quad layer showing a whole swapchain image, facing the player, centred at pX, pY, pZ in pSpace
+// and pWidth x pHeight metres large. pBlend: the image's alpha lets through what is behind it.
+static void VR_FillQuadLayer(XrCompositionLayerQuad* pLayer, XrSpace pSpace, const tVR_eye_swapchain* pSwapchain, int pBlend,
+    float pX, float pY, float pZ, float pWidth, float pHeight) {
+    memset(pLayer, 0, sizeof(*pLayer));
+    pLayer->type = XR_TYPE_COMPOSITION_LAYER_QUAD;
+    pLayer->layerFlags = pBlend ? XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT : 0;
+    pLayer->space = pSpace;
+    pLayer->eyeVisibility = XR_EYE_VISIBILITY_BOTH;
+    pLayer->subImage.swapchain = pSwapchain->handle;
+    pLayer->subImage.imageRect.extent.width = pSwapchain->width;
+    pLayer->subImage.imageRect.extent.height = pSwapchain->height;
+    pLayer->pose.orientation.w = 1.0f;
+    pLayer->pose.position.x = pX;
+    pLayer->pose.position.y = pY;
+    pLayer->pose.position.z = pZ;
+    pLayer->size.width = pWidth;
+    pLayer->size.height = pHeight;
+}
+
 // HUD quad in front of the player, in the space of the eyes (relative to the head position when the
 // session started). Transparent where the game drew no 2D overlay this frame.
 static int VR_RenderHud(XrCompositionLayerQuad* pLayer) {
     if (hud_target == NULL || !VR_CopyToSwapchain(&hud_swapchain, hud_texture, -1, 0, "hud")) {
         return 0;
     }
-    pLayer->type = XR_TYPE_COMPOSITION_LAYER_QUAD;
-    pLayer->next = NULL;
-    pLayer->layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-    pLayer->space = space;
-    pLayer->eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-    pLayer->subImage.swapchain = hud_swapchain.handle;
-    pLayer->subImage.imageRect.offset.x = 0;
-    pLayer->subImage.imageRect.offset.y = 0;
-    pLayer->subImage.imageRect.extent.width = hud_swapchain.width;
-    pLayer->subImage.imageRect.extent.height = hud_swapchain.height;
-    pLayer->subImage.imageArrayIndex = 0;
-    pLayer->pose.orientation.x = 0.0f;
-    pLayer->pose.orientation.y = 0.0f;
-    pLayer->pose.orientation.z = 0.0f;
-    pLayer->pose.orientation.w = 1.0f;
-    pLayer->pose.position.x = 0.0f;
-    pLayer->pose.position.y = 0.0f;
-    pLayer->pose.position.z = -harness_game_config.vr_hud_distance;
-    pLayer->size.width = harness_game_config.vr_hud_width;
-    pLayer->size.height = harness_game_config.vr_hud_width * hud_swapchain.height / hud_swapchain.width;
+    VR_FillQuadLayer(pLayer, space, &hud_swapchain, 1, 0.0f, 0.0f, -harness_game_config.vr_hud_distance,
+        harness_game_config.vr_hud_width, harness_game_config.vr_hud_width * hud_swapchain.height / hud_swapchain.width);
     return 1;
 }
 
@@ -674,32 +676,21 @@ static int VR_RenderHud(XrCompositionLayerQuad* pLayer) {
 static int VR_RenderMirror(XrCompositionLayerQuad* pLayer) {
     float hud_width;
     float hud_height;
+    float width;
+    float height;
 
     if (!VR_CopyToSwapchain(&mirror_swapchain, mirror_texture, -1, 0, "mirror")) {
         return 0;
     }
     hud_width = harness_game_config.vr_hud_width;
     hud_height = hud_width * hud_swapchain.height / hud_swapchain.width;
-    pLayer->type = XR_TYPE_COMPOSITION_LAYER_QUAD;
-    pLayer->next = NULL;
-    pLayer->layerFlags = 0;
-    pLayer->space = space;
-    pLayer->eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-    pLayer->subImage.swapchain = mirror_swapchain.handle;
-    pLayer->subImage.imageRect.offset.x = 0;
-    pLayer->subImage.imageRect.offset.y = 0;
-    pLayer->subImage.imageRect.extent.width = mirror_swapchain.width;
-    pLayer->subImage.imageRect.extent.height = mirror_swapchain.height;
-    pLayer->subImage.imageArrayIndex = 0;
-    pLayer->pose.orientation.x = 0.0f;
-    pLayer->pose.orientation.y = 0.0f;
-    pLayer->pose.orientation.z = 0.0f;
-    pLayer->pose.orientation.w = 1.0f;
-    pLayer->size.width = hud_width * VR_MIRROR_SIZE;
-    pLayer->size.height = pLayer->size.width * mirror_swapchain.height / mirror_swapchain.width;
-    pLayer->pose.position.x = (mirror_centre_x - 0.5f) * hud_width;
-    pLayer->pose.position.y = (0.5f - mirror_top_y) * hud_height - pLayer->size.height / 2.0f;
-    pLayer->pose.position.z = -harness_game_config.vr_hud_distance + VR_MIRROR_FORWARD;
+    width = hud_width * VR_MIRROR_SIZE;
+    height = width * mirror_swapchain.height / mirror_swapchain.width;
+    VR_FillQuadLayer(pLayer, space, &mirror_swapchain, 0,
+        (mirror_centre_x - 0.5f) * hud_width,
+        (0.5f - mirror_top_y) * hud_height - height / 2.0f,
+        -harness_game_config.vr_hud_distance + VR_MIRROR_FORWARD,
+        width, height);
     return 1;
 }
 
@@ -736,47 +727,24 @@ static int VR_RenderBlood(XrCompositionLayerQuad* pLayer) {
         return 0;
     }
 
-    pLayer->type = XR_TYPE_COMPOSITION_LAYER_QUAD;
-    pLayer->next = NULL;
-    pLayer->layerFlags = XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT;
-    pLayer->space = view_space;
-    pLayer->eyeVisibility = XR_EYE_VISIBILITY_BOTH;
-    pLayer->subImage.swapchain = blood_swapchain.handle;
-    pLayer->subImage.imageRect.offset.x = 0;
-    pLayer->subImage.imageRect.offset.y = 0;
-    pLayer->subImage.imageRect.extent.width = blood_swapchain.width;
-    pLayer->subImage.imageRect.extent.height = blood_swapchain.height;
-    pLayer->subImage.imageArrayIndex = 0;
-    pLayer->pose.orientation.x = 0.0f;
-    pLayer->pose.orientation.y = 0.0f;
-    pLayer->pose.orientation.z = 0.0f;
-    pLayer->pose.orientation.w = 1.0f;
-    pLayer->pose.position.x = 0.0f;
-    pLayer->pose.position.y = 0.0f;
-    pLayer->pose.position.z = -VR_BLOOD_DISTANCE;
-    pLayer->size.width = 2.0f * half_width;
-    pLayer->size.height = 2.0f * half_height;
+    VR_FillQuadLayer(pLayer, view_space, &blood_swapchain, 1, 0.0f, 0.0f, -VR_BLOOD_DISTANCE, 2.0f * half_width, 2.0f * half_height);
     return 1;
 }
 
 // Hands the eye images of the frame in progress to the runtime. They were rendered with the views
 // located in VR_BeginNextFrame, which are submitted unchanged with them.
-static void VR_EndCurrentFrame(void) {
-    XrFrameEndInfo end_info = { .type = XR_TYPE_FRAME_END_INFO };
-    XrCompositionLayerProjection layer = { .type = XR_TYPE_COMPOSITION_LAYER_PROJECTION };
-    XrCompositionLayerProjectionView layer_views[VR_EYE_COUNT];
-    XrCompositionLayerQuad hud_layer;
-    XrCompositionLayerQuad mirror_layer;
-    XrCompositionLayerQuad blood_layer;
-    const XrCompositionLayerBaseHeader* layers[4];
+// The layers of this frame, back to front: the eyes' 3D image, HUD, mirror, blood. Returns their
+// number; *pRendered: whether the eye images were rendered.
+static uint32_t VR_RenderLayers(const XrCompositionLayerBaseHeader** pLayers, int* pRendered) {
+    // Static: the runtime reads them in xrEndFrame, after this returns
+    static XrCompositionLayerProjection layer;
+    static XrCompositionLayerProjectionView layer_views[VR_EYE_COUNT];
+    static XrCompositionLayerQuad hud_layer;
+    static XrCompositionLayerQuad mirror_layer;
+    static XrCompositionLayerQuad blood_layer;
     uint32_t layer_count = 0;
     int rendered = 0;
     int i;
-
-    if (!frame_begun) {
-        return;
-    }
-    frame_begun = 0;
 
     if (frame_state.shouldRender && views_valid) {
         rendered = 1;
@@ -784,28 +752,46 @@ static void VR_EndCurrentFrame(void) {
             rendered = VR_RenderEye(i, &layer_views[i]);
         }
     }
+    layer.type = XR_TYPE_COMPOSITION_LAYER_PROJECTION;
     layer.space = space;
     layer.viewCount = VR_EYE_COUNT;
     layer.views = layer_views;
     if (rendered) {
-        layers[layer_count++] = (const XrCompositionLayerBaseHeader*)&layer;
+        pLayers[layer_count++] = (const XrCompositionLayerBaseHeader*)&layer;
     }
     // Menus always; the HUD during the race only if wanted ([VR] Hud)
     if (frame_state.shouldRender && (!rendered || harness_game_config.vr_hud) && VR_RenderHud(&hud_layer)) {
-        layers[layer_count++] = (const XrCompositionLayerBaseHeader*)&hud_layer;
+        pLayers[layer_count++] = (const XrCompositionLayerBaseHeader*)&hud_layer;
     }
     // Rear view mirror only in frames the game rendered it in
     if (rendered && mirror_rendered && VR_RenderMirror(&mirror_layer)) {
-        layers[layer_count++] = (const XrCompositionLayerBaseHeader*)&mirror_layer;
+        pLayers[layer_count++] = (const XrCompositionLayerBaseHeader*)&mirror_layer;
     }
     mirror_rendered = 0;
     // Blood on the lens in front of everything, as long as a splatter is visible
     if (blood_ready) {
         VR_Blood_Advance(frame_state.predictedDisplayPeriod / 1e9f);
         if (frame_state.shouldRender && views_valid && VR_Blood_Active() && VR_RenderBlood(&blood_layer)) {
-            layers[layer_count++] = (const XrCompositionLayerBaseHeader*)&blood_layer;
+            pLayers[layer_count++] = (const XrCompositionLayerBaseHeader*)&blood_layer;
         }
     }
+    *pRendered = rendered;
+    return layer_count;
+}
+
+static void VR_EndCurrentFrame(void) {
+    XrFrameEndInfo end_info = { .type = XR_TYPE_FRAME_END_INFO };
+    const XrCompositionLayerBaseHeader* layers[4];
+    uint32_t layer_count;
+    int rendered;
+    int i;
+
+    if (!frame_begun) {
+        return;
+    }
+    frame_begun = 0;
+
+    layer_count = VR_RenderLayers(layers, &rendered);
     end_info.displayTime = frame_state.predictedDisplayTime;
     end_info.environmentBlendMode = XR_ENVIRONMENT_BLEND_MODE_OPAQUE;
     end_info.layerCount = layer_count;
@@ -1054,26 +1040,22 @@ void VR_Install(tHarness_platform* pPlatform) {
     harness_game_config.grab_mouse = 1;
 }
 
+static void VR_DestroySwapchain(tVR_eye_swapchain* pSwapchain) {
+    if (pSwapchain->handle != XR_NULL_HANDLE) {
+        xrDestroySwapchain(pSwapchain->handle);
+    }
+    free(pSwapchain->images);
+    memset(pSwapchain, 0, sizeof(*pSwapchain));
+}
+
 void VR_Shutdown(void) {
     int i;
 
     for (i = 0; i < VR_EYE_COUNT; i++) {
-        if (eye_swapchains[i].handle != XR_NULL_HANDLE) {
-            xrDestroySwapchain(eye_swapchains[i].handle);
-        }
-        free(eye_swapchains[i].images);
-        memset(&eye_swapchains[i], 0, sizeof(eye_swapchains[i]));
+        VR_DestroySwapchain(&eye_swapchains[i]);
     }
-    if (blood_swapchain.handle != XR_NULL_HANDLE) {
-        xrDestroySwapchain(blood_swapchain.handle);
-    }
-    free(blood_swapchain.images);
-    memset(&blood_swapchain, 0, sizeof(blood_swapchain));
-    if (mirror_swapchain.handle != XR_NULL_HANDLE) {
-        xrDestroySwapchain(mirror_swapchain.handle);
-    }
-    free(mirror_swapchain.images);
-    memset(&mirror_swapchain, 0, sizeof(mirror_swapchain));
+    VR_DestroySwapchain(&blood_swapchain);
+    VR_DestroySwapchain(&mirror_swapchain);
     mirror_target = NULL;
     mirror_depth = NULL;
     mirror_texture = 0;
@@ -1100,11 +1082,7 @@ void VR_Shutdown(void) {
     session_state = XR_SESSION_STATE_UNKNOWN;
     frame_begun = 0;
     views_valid = 0;
-    if (hud_swapchain.handle != XR_NULL_HANDLE) {
-        xrDestroySwapchain(hud_swapchain.handle);
-    }
-    free(hud_swapchain.images);
-    memset(&hud_swapchain, 0, sizeof(hud_swapchain));
+    VR_DestroySwapchain(&hud_swapchain);
     if (hud_screen != NULL) {
         BrGLRendSetOverlayCapture(hud_screen, NULL);
     }
