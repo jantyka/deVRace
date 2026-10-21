@@ -1990,6 +1990,101 @@ static int VR_HasBorrowedBonnet(tCar_spec* pCar) {
     return borrowed;
 }
 
+// What the eye passes change, to be put back afterwards
+typedef struct tVR_saved_render {
+    br_pixelmap* render_screen;
+    br_pixelmap* depth_buffer;
+    br_matrix34 camera_matrix;
+    br_matrix34 camera_to_world;
+    br_angle field_of_view;
+    br_scalar aspect;
+    int car_actor;
+    tU8* pipe_buffer;
+} tVR_saved_render;
+
+// Where the blood on the lens goes this frame, with the car's speed and steering
+static void VR_UpdateBloodView(tCar_spec* pCar) {
+    int blood_view;
+
+    if (gProgram_state.cockpit_on) {
+        blood_view = VR_VIEW_COCKPIT;
+    } else if (gVR_far_chase_camera) {
+        blood_view = VR_VIEW_FAR_CHASE;
+    } else {
+        blood_view = VR_VIEW_CHASE;
+    }
+    VR_SetBloodView(blood_view, fabsf(pCar->speedo_speed) * WORLD_SCALE * 3600.f,
+        pCar->maxcurve > 0.f ? pCar->curvature / pCar->maxcurve : 0.f);
+}
+
+static void VR_SaveRender(tVR_saved_render* pSaved, br_camera* pCamera_data, tCar_spec* pCar) {
+    pSaved->render_screen = gRender_screen;
+    pSaved->depth_buffer = gDepth_buffer;
+    pSaved->field_of_view = pCamera_data->field_of_view;
+    pSaved->aspect = pCamera_data->aspect;
+    BrMatrix34Copy(&pSaved->camera_matrix, &gCamera->t.t.mat);
+    BrMatrix34Copy(&pSaved->camera_to_world, &gCamera_to_world);
+    pSaved->car_actor = pCar->current_car_actor;
+    pSaved->pipe_buffer = gPipe_buffer_start;
+}
+
+static void VR_RestoreRender(tVR_saved_render* pSaved, br_camera* pCamera_data, tCar_spec* pCar) {
+    gPipe_buffer_start = pSaved->pipe_buffer;
+    if (pCar->current_car_actor != pSaved->car_actor) {
+        SwitchCarActor(pCar, pSaved->car_actor);
+    }
+    gRender_screen = pSaved->render_screen;
+    gDepth_buffer = pSaved->depth_buffer;
+    pCamera_data->field_of_view = pSaved->field_of_view;
+    pCamera_data->aspect = pSaved->aspect;
+    BrMatrix34Copy(&gCamera->t.t.mat, &pSaved->camera_matrix);
+    BrMatrix34Copy(&gCamera_to_world, &pSaved->camera_to_world);
+}
+
+// One eye: its camera and frustum, then the 3D part of RenderAFrame into its render target
+static void VR_RenderEyeScene(int pEye, br_camera* pCamera_data, br_matrix34* pCamera_matrix, br_matrix34* pOld_camera_matrix,
+    br_pixelmap* pColour, br_pixelmap* pDepth) {
+    br_matrix34 eye_to_camera;
+    br_scalar left, right, top, bottom;
+    br_scalar half_width, half_height;
+
+    BrPixelmapFill(pColour, VR_SkyFillColour());
+    BrPixelmapFill(pDepth, 0xFFFFFFFF);
+
+    VR_GetEyeFrustum(pEye, &left, &right, &top, &bottom);
+    BrDbSetFrustumOverride(left, right, top, bottom);
+    // Track culling (RenderTrack) works with the camera's symmetric field of view: make it
+    // cover the eye's frustum, with some margin
+    half_width = MAX(right, -left);
+    half_height = MAX(top, -bottom);
+    pCamera_data->field_of_view = BrRadianToAngle(2.f * atan(half_height * 1.15f));
+    pCamera_data->aspect = half_width / half_height;
+
+    VR_GetEyeToCamera(pEye, WORLD_SCALE, &eye_to_camera);
+    BrMatrix34Mul(&gCamera->t.t.mat, &eye_to_camera, pCamera_matrix);
+    BrActorToActorMatrix34(&gCamera_to_world, gCamera, gUniverse_actor);
+    gRender_screen = pColour;
+    gDepth_buffer = pDepth;
+
+    RenderShadows(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world);
+    BrZbSceneRenderBegin(gUniverse_actor, gCamera, gRender_screen, gDepth_buffer);
+    ProcessNonTrackActors(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, pOld_camera_matrix);
+    ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 0);
+    RenderLollipops();
+    VR_DepthEffectSky(gCamera, &gCamera_to_world);
+    DepthEffect(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world);
+    if (!gAusterity_mode) {
+        ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 1);
+    }
+    RenderSplashes();
+    RenderSmoke(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, 0);
+    RenderSparks(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, 0);
+    RenderProximityRays(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, 0);
+    BrZbSceneRenderEnd();
+
+    BrDbClearFrustumOverride();
+}
+
 // VR: renders the 3D pass of RenderAFrame once more per eye into the headset's render targets. For
 // each eye the globals the pass relies on (camera matrix and camera to world transform, render and
 // depth buffer) point to the eye while it is rendered and are restored afterwards, so helpers that
@@ -2000,112 +2095,41 @@ static int VR_HasBorrowedBonnet(tCar_spec* pCar) {
 // covers it, the sky as a cylinder fixed to the world (VR_DepthEffectSky), no camera shear, and a
 // time of 0 for smoke, sparks and proximity rays so their animation advances once per frame.
 static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
+    tVR_saved_render saved;
     br_pixelmap* colour;
     br_pixelmap* depth;
-    br_pixelmap* saved_render_screen;
-    br_pixelmap* saved_depth_buffer;
-    br_matrix34 saved_camera_matrix;
-    br_matrix34 saved_camera_to_world;
     br_matrix34 camera_matrix;
-    br_matrix34 eye_to_camera;
     br_camera* camera_data;
-    br_angle saved_fov;
-    br_scalar saved_aspect;
-    br_scalar left, right, top, bottom;
-    int blood_view;
-    br_scalar half_width, half_height;
     tCar_spec* car;
-    int saved_car_actor;
-    tU8* saved_pipe_buffer;
     int eye;
 
     if (!VR_WantsEyeImages()) {
         return;
     }
     car = &gProgram_state.current_car;
-    if (gProgram_state.cockpit_on) {
-        blood_view = VR_VIEW_COCKPIT;
-    } else if (gVR_far_chase_camera) {
-        blood_view = VR_VIEW_FAR_CHASE;
-    } else {
-        blood_view = VR_VIEW_CHASE;
-    }
-    VR_SetBloodView(blood_view, fabsf(car->speedo_speed) * WORLD_SCALE * 3600.f,
-        car->maxcurve > 0.f ? car->curvature / car->maxcurve : 0.f);
     camera_data = gCamera->type_data;
-    saved_render_screen = gRender_screen;
-    saved_depth_buffer = gDepth_buffer;
-    saved_fov = camera_data->field_of_view;
-    saved_aspect = camera_data->aspect;
-    BrMatrix34Copy(&saved_camera_matrix, &gCamera->t.t.mat);
-    BrMatrix34Copy(&saved_camera_to_world, &gCamera_to_world);
+    VR_UpdateBloodView(car);
+    VR_SaveRender(&saved, camera_data, car);
     BrMatrix34Copy(&camera_matrix, &gCamera->t.t.mat);
     VR_RemoveCameraShear(&camera_matrix);
     // In the cockpit view a bonnet borrowed from another car is hidden (SwitchCarActor with -1 shows
     // none of the car's models); the regular pass keeps it under its 2D dashboard
-    car = &gProgram_state.current_car;
-    saved_car_actor = car->current_car_actor;
     if (harness_game_config.vr_hide_borrowed_bonnet && gProgram_state.cockpit_on
         && car->current_car_actor == car->car_actor_count - 1 && VR_HasBorrowedBonnet(car)) {
         SwitchCarActor(car, -1);
     }
     // Smoke, sparks, proximity rays and pedestrians record themselves for the action replay while
     // they render. Only the regular pass may do that, so recording is off during the eye passes.
-    saved_pipe_buffer = gPipe_buffer_start;
     gPipe_buffer_start = NULL;
 
     for (eye = 0; eye < VR_EYE_COUNT; eye++) {
         if (!VR_BeginEye(eye, gScreen, &colour, &depth)) {
             break;
         }
-        BrPixelmapFill(colour, VR_SkyFillColour());
-        BrPixelmapFill(depth, 0xFFFFFFFF);
-
-        VR_GetEyeFrustum(eye, &left, &right, &top, &bottom);
-        BrDbSetFrustumOverride(left, right, top, bottom);
-        // Track culling (RenderTrack) works with the camera's symmetric field of view: make it
-        // cover the eye's frustum, with some margin
-        half_width = MAX(right, -left);
-        half_height = MAX(top, -bottom);
-        camera_data->field_of_view = BrRadianToAngle(2.f * atan(half_height * 1.15f));
-        camera_data->aspect = half_width / half_height;
-
-        VR_GetEyeToCamera(eye, WORLD_SCALE, &eye_to_camera);
-        BrMatrix34Mul(&gCamera->t.t.mat, &eye_to_camera, &camera_matrix);
-        BrActorToActorMatrix34(&gCamera_to_world, gCamera, gUniverse_actor);
-        gRender_screen = colour;
-        gDepth_buffer = depth;
-
-        RenderShadows(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world);
-        BrZbSceneRenderBegin(gUniverse_actor, gCamera, gRender_screen, gDepth_buffer);
-        ProcessNonTrackActors(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, pOld_camera_matrix);
-        ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 0);
-        RenderLollipops();
-        VR_DepthEffectSky(gCamera, &gCamera_to_world);
-        DepthEffect(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world);
-        if (!gAusterity_mode) {
-            ProcessTrack(gUniverse_actor, &gProgram_state.track_spec, gCamera, &gCamera_to_world, 1);
-        }
-        RenderSplashes();
-        RenderSmoke(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, 0);
-        RenderSparks(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, 0);
-        RenderProximityRays(gRender_screen, gDepth_buffer, gCamera, &gCamera_to_world, 0);
-        BrZbSceneRenderEnd();
-
-        BrDbClearFrustumOverride();
+        VR_RenderEyeScene(eye, camera_data, &camera_matrix, pOld_camera_matrix, colour, depth);
         VR_EndEye(eye);
     }
-
-    gPipe_buffer_start = saved_pipe_buffer;
-    if (car->current_car_actor != saved_car_actor) {
-        SwitchCarActor(car, saved_car_actor);
-    }
-    gRender_screen = saved_render_screen;
-    gDepth_buffer = saved_depth_buffer;
-    camera_data->field_of_view = saved_fov;
-    camera_data->aspect = saved_aspect;
-    BrMatrix34Copy(&gCamera->t.t.mat, &saved_camera_matrix);
-    BrMatrix34Copy(&gCamera_to_world, &saved_camera_to_world);
+    VR_RestoreRender(&saved, camera_data, car);
 }
 
 // VR: the rear view mirror of the cockpit view, as a rectangle of its own on the HUD quad right below
