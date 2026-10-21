@@ -144,6 +144,8 @@ typedef struct tHarness_game_config {
     // VR: distance and width of the HUD/menu quad in metres
     float vr_hud_distance;
     float vr_hud_width;
+    // VR: comfort vignette, narrows the view when the car is fast, turns or tumbles
+    int vr_comfort_vignette;
     // VR: blood on the lens when running over pedestrians at speed
     int vr_blood;
     // VR: the blood is the game's own gib sprites instead of the drawn splatters

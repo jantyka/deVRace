@@ -2002,8 +2002,10 @@ typedef struct tVR_saved_render {
     tU8* pipe_buffer;
 } tVR_saved_render;
 
-// Where the blood on the lens goes this frame, with the car's speed and steering
-static void VR_UpdateBloodView(tCar_spec* pCar) {
+// How the view moves this frame, for the blood on the lens (where it goes, the car's speed and
+// steering) and the comfort vignette (rotation of camera and car, speed)
+static void VR_UpdateViewMotion(tCar_spec* pCar) {
+    float speed_kmh = fabsf(pCar->speedo_speed) * WORLD_SCALE * 3600.f;
     int blood_view;
 
     if (gProgram_state.cockpit_on) {
@@ -2013,8 +2015,8 @@ static void VR_UpdateBloodView(tCar_spec* pCar) {
     } else {
         blood_view = VR_VIEW_CHASE;
     }
-    VR_SetBloodView(blood_view, fabsf(pCar->speedo_speed) * WORLD_SCALE * 3600.f,
-        pCar->maxcurve > 0.f ? pCar->curvature / pCar->maxcurve : 0.f);
+    VR_SetBloodView(blood_view, speed_kmh, pCar->maxcurve > 0.f ? pCar->curvature / pCar->maxcurve : 0.f);
+    VR_SetComfortMotion(&gCamera_to_world, &pCar->car_master_actor->t.t.mat, speed_kmh);
 }
 
 static void VR_SaveRender(tVR_saved_render* pSaved, br_camera* pCamera_data, tCar_spec* pCar) {
@@ -2108,7 +2110,7 @@ static void VR_RenderEyePasses(br_matrix34* pOld_camera_matrix) {
     }
     car = &gProgram_state.current_car;
     camera_data = gCamera->type_data;
-    VR_UpdateBloodView(car);
+    VR_UpdateViewMotion(car);
     VR_SaveRender(&saved, camera_data, car);
     BrMatrix34Copy(&camera_matrix, &gCamera->t.t.mat);
     VR_RemoveCameraShear(&camera_matrix);

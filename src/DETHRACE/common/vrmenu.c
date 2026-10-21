@@ -32,8 +32,8 @@ static const tRectile gVR_button_rect = { { 12, 25 }, { 125, 300 }, { 52, 105 },
 static const tRectile gVR_panel_rect = { { 50, 100 }, { 33, 80 }, { 280, 560 }, { 150, 360 } };
 static const tRectile gVR_done_rect = { { 57, 114 }, { 154, 370 }, { 123, 246 }, { 175, 420 } };
 // Rows of the VR options: the first one, the others below it at this distance
-static const tRectile gVR_row_rect = { { 58, 116 }, { 50, 120 }, { 272, 544 }, { 63, 151 } };
-static const int gVR_row_step[2] = { 14, 34 };
+static const tRectile gVR_row_rect = { { 58, 116 }, { 48, 116 }, { 272, 544 }, { 59, 144 } };
+static const int gVR_row_step[2] = { 12, 30 };
 
 // The VR options: label, value, its entry in dethrace.ini and what changes at once when it is
 // switched (NULL: from the next race on, or nothing beyond the value). is_effect: the post effect
@@ -49,6 +49,7 @@ static const struct {
     int is_effect;
     int* shown_if;
 } gVR_options[] = {
+    { "COMFORT VIGNETTE", &harness_game_config.vr_comfort_vignette, "VR", "ComfortVignette", NULL },
     { "CAMERA BLOOD EFFECT", &harness_game_config.vr_blood, "VR", "Blood", NULL },
     { "PIXEL BLOOD", &harness_game_config.vr_blood_pixel, "VR", "BloodPixel", NULL, 0, &harness_game_config.vr_blood },
     { "VASTLY EXTENDED DRAW DISTANCE", &harness_game_config.extend_draw_distance, "Slop", "ExtendDrawDistance", VRMenu_ApplyDrawDistance },

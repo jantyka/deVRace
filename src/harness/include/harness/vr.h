@@ -61,6 +61,11 @@ int VR_BeginMirror(float pCentre_x, float pTop_y, br_pixelmap** pColour, br_pixe
 // Moves the centre of the view to where the head is and looks now (on the next headset frame)
 void VR_Recenter(void);
 
+// Call once per frame during the race with the game camera's and the player's car's matrices (in
+// world space) and the car's speed: the comfort vignette ([VR] ComfortVignette) narrows the view
+// when they turn or tumble fast, and a little at high speed
+void VR_SetComfortMotion(const br_matrix34* pCamera, const br_matrix34* pCar, float pSpeed_kmh);
+
 // Views for VR_SetBloodView
 #define VR_VIEW_CHASE 0
 #define VR_VIEW_COCKPIT 1

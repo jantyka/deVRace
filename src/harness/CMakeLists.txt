@@ -107,6 +107,8 @@ if(DETHRACE_VR)
         vr/vr.h
         vr/vr_blood.c
         vr/vr_blood.h
+        vr/vr_comfort.c
+        vr/vr_comfort.h
         vr/vr_gfx.h
         vr/vr_gfx_egl.c
     )

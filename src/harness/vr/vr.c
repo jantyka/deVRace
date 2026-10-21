@@ -15,6 +15,7 @@
 #include "../gl_util.h"
 #include "../postfx/postfx.h"
 #include "vr_blood.h"
+#include "vr_comfort.h"
 #include "vr_gfx.h"
 
 #include "include/harness/config.h"
@@ -595,8 +596,10 @@ static int VR_EndSwapchainImage(tVR_eye_swapchain* pSwapchain, const tGL_util_st
 
 // Copies a texture of the swapchain's size into its next image (pTexture 0: clears it to black).
 // pEffect: post effect to draw it with (pDepth_texture: its depth buffer), -1 for a plain copy.
+// pVignette: the eye's field of view to draw the comfort vignette for, NULL for none.
 // pDump_name: written as PPM when dumping is due, NULL for never.
-static int VR_CopyToSwapchain(tVR_eye_swapchain* pSwapchain, GLuint pTexture, int pEffect, GLuint pDepth_texture, const char* pDump_name) {
+static int VR_CopyToSwapchain(tVR_eye_swapchain* pSwapchain, GLuint pTexture, int pEffect, GLuint pDepth_texture,
+    const XrFovf* pVignette, const char* pDump_name) {
     tGL_util_state state;
 
     if (!VR_BeginSwapchainImage(pSwapchain, &state)) {
@@ -613,6 +616,10 @@ static int VR_CopyToSwapchain(tVR_eye_swapchain* pSwapchain, GLuint pTexture, in
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
     }
+    if (pTexture != 0 && pVignette != NULL && VR_Comfort_Active()) {
+        VR_Comfort_Draw(pSwapchain->width, pSwapchain->height,
+            tanf(pVignette->angleLeft), tanf(pVignette->angleRight), tanf(pVignette->angleDown), tanf(pVignette->angleUp));
+    }
 
     if (pDump_name != NULL && VR_ShouldDump()) {
         glBindFramebuffer(GL_READ_FRAMEBUFFER, eye_framebuffer);
@@ -625,7 +632,8 @@ static int VR_RenderEye(int pEye, XrCompositionLayerProjectionView* pLayer_view)
     tVR_eye_swapchain* eye = &eye_swapchains[pEye];
     tVR_eye_target* target = &eye_targets[pEye];
 
-    if (!VR_CopyToSwapchain(eye, target->rendered ? target->texture : 0, PostFX_Current(), target->depth_texture, target->rendered ? (pEye == 0 ? "left" : "right") : NULL)) {
+    if (!VR_CopyToSwapchain(eye, target->rendered ? target->texture : 0, PostFX_Current(), target->depth_texture, &views[pEye].fov,
+            target->rendered ? (pEye == 0 ? "left" : "right") : NULL)) {
         return 0;
     }
     pLayer_view->type = XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW;
@@ -664,7 +672,7 @@ static void VR_FillQuadLayer(XrCompositionLayerQuad* pLayer, XrSpace pSpace, con
 // HUD quad in front of the player, in the space of the eyes (relative to the head position when the
 // session started). Transparent where the game drew no 2D overlay this frame.
 static int VR_RenderHud(XrCompositionLayerQuad* pLayer) {
-    if (hud_target == NULL || !VR_CopyToSwapchain(&hud_swapchain, hud_texture, -1, 0, "hud")) {
+    if (hud_target == NULL || !VR_CopyToSwapchain(&hud_swapchain, hud_texture, -1, 0, NULL, "hud")) {
         return 0;
     }
     VR_FillQuadLayer(pLayer, space, &hud_swapchain, 1, 0.0f, 0.0f, -harness_game_config.vr_hud_distance,
@@ -679,7 +687,7 @@ static int VR_RenderMirror(XrCompositionLayerQuad* pLayer) {
     float width;
     float height;
 
-    if (!VR_CopyToSwapchain(&mirror_swapchain, mirror_texture, -1, 0, "mirror")) {
+    if (!VR_CopyToSwapchain(&mirror_swapchain, mirror_texture, -1, 0, NULL, "mirror")) {
         return 0;
     }
     hud_width = harness_game_config.vr_hud_width;
@@ -746,6 +754,7 @@ static uint32_t VR_RenderLayers(const XrCompositionLayerBaseHeader** pLayers, in
     int rendered = 0;
     int i;
 
+    VR_Comfort_Advance(frame_state.predictedDisplayPeriod / 1e9f);
     if (frame_state.shouldRender && views_valid) {
         rendered = 1;
         for (i = 0; i < VR_EYE_COUNT && rendered; i++) {
@@ -1066,6 +1075,7 @@ void VR_Shutdown(void) {
     }
     blood_ready = 0;
     VR_Blood_Shutdown();
+    VR_Comfort_Shutdown();
     if (space != XR_NULL_HANDLE) {
         xrDestroySpace(space);
         space = XR_NULL_HANDLE;

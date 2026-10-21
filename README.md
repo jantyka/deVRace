@@ -23,7 +23,8 @@ The original Dethrace README is in [docs/README.dethrace.md](docs/README.dethrac
 - **Blood on the lens** when you run over pedestrians at speed: drips run down the lens in the chase views (smaller and fewer in the far one); in the cockpit the airstream pushes it up the windscreen and to the outside of a turn. Moving the mouse too fast in the menus splatters some too. With pixel blood on (`PIXEL BLOOD` in the VR options, `[VR] BloodPixel`), the splatters are the game's own gib sprites instead, turned at random, with their big pixels and without drips or trails.
 - **Rear view mirror** in the cockpit view, as a rectangle right below the race timer (`Mirror`).
 - **Graphics options at their best** on each start (`MaxDetail`).
-- **VR options** in the game's options screen (VR button): switch the blood on the lens, the options from the slop pack (below) and the post effects (below) on and off, and pick the effect; saved to `dethrace.ini`.
+- **Comfort vignette** (off by default): the view narrows to a clear circle while the car turns or tumbles fast, and a little at high speed; it closes quickly and opens again slowly.
+- **VR options** in the game's options screen (VR button): switch the comfort vignette, the blood on the lens, the options from the slop pack (below) and the post effects (below) on and off, and pick the effect; saved to `dethrace.ini`.
 - **Post effects** on the 3D image of each eye, one at a time: `SHARPEN` (contrast adaptive), `VIVID`, `JUNKYARD`, `GLOW` (bloom), `VOODOO` (16-bit colours with dither, like a 3dfx card), `COMIC` (outlines, flat colours) and `CRT` (monitor only). The HUD, mirror and blood are drawn on top, untouched. Off by default; switched in the VR options (`SHADER`, `EFFECT`) or in `[Graphics]`.
 - **Cockpit view without the 2D dashboard** and without the driver's hands, showing the car's 3D bonnet. Cars whose data borrows another car's bonnet (most opponents use the Eagle's) show none instead of the wrong one.
 - **Smoke, sparks, shadows, culling and cockpit shake** are rendered per eye; the action replay is recorded only once.
@@ -180,6 +181,7 @@ HudMessages = 1
 HudInstruments = 1
 HudPowerups = 1
 HideBorrowedBonnet = 1 ; hide bonnets a car borrows from another car in the cockpit view
+ComfortVignette = 0 ; narrow the view when the car turns or tumbles fast, and a little at high speed
 Blood = 1          ; blood may splatter onto the lens when you run over pedestrians at over 70 km/h
 BloodPixel = 1     ; the blood is made of the game's gib sprites instead of drawn splatters
 Mirror = 1         ; rear view mirror in the cockpit view, below the race timer
