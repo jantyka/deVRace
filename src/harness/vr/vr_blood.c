@@ -62,7 +62,7 @@ static const char* sprite_names[] = {
 
 // Menus: moving the mouse faster than this many screen sizes per second splatters blood, at most once
 // per cooldown
-#define VR_BLOOD_MENU_SCREENS 4.0f
+#define VR_BLOOD_MENU_SCREENS 6.0f
 #define VR_BLOOD_MENU_COOLDOWN 1.2f
 
 typedef struct tVR_splat {
