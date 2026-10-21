@@ -861,20 +861,51 @@ static size_t Harness_IniKey(const char* pLine, const char** pStart) {
     return end - pLine;
 }
 
+// Writes pLine (an entry whose name ends at pKey + pKey_length) with pValue as its value, keeping
+// the indentation and a comment behind it in its column
+static void Harness_WriteIniEntry(FILE* pOut, const char* pLine, const char* pKey, size_t pKey_length, const char* pValue) {
+    const char* comment;
+    int column;
+
+    comment = strpbrk(strchr(pKey, '=') + 1, ";#");
+    column = fprintf(pOut, "%.*s = %s", (int)(pKey + pKey_length - pLine), pLine, pValue);
+    if (comment != NULL) {
+        fprintf(pOut, "%*s%s", (int)(comment - pLine) - column > 1 ? (int)(comment - pLine) - column : 1, "", comment);
+    } else {
+        fputc('\n', pOut);
+    }
+}
+
+// Puts the written temporary file in place of the ini (pHad_ini: there was one before)
+static int Harness_ReplaceIni(const char* pPath, const char* pTemp_path, FILE* pOut, int pHad_ini) {
+#ifdef _WIN32
+    // rename does not replace an existing file there
+    if (pHad_ini) {
+        remove(pPath);
+    }
+#else
+    (void)pHad_ini;
+#endif
+    if (fclose(pOut) != 0 || rename(pTemp_path, pPath) != 0) {
+        LOG_WARN2("Cannot write %s", pPath);
+        remove(pTemp_path);
+        return 1;
+    }
+    return 0;
+}
+
 int Harness_SaveIniValue(const char* pSection, const char* pName, const char* pValue) {
     char path[1024];
     char temp_path[1040];
     char line[1024];
     char section[256] = "";
     const char* key;
-    const char* comment;
     size_t key_length;
     FILE* in;
     FILE* out;
     int in_section = 0;
     int written = 0;
     int blank_lines = 0;
-    int column;
 
     Harness_GetIniPath(path);
     snprintf(temp_path, sizeof(temp_path), "%s.tmp", path);
@@ -904,14 +935,7 @@ int Harness_SaveIniValue(const char* pSection, const char* pName, const char* pV
             fputc('\n', out);
         }
         if (in_section && !written && key_length == strlen(pName) && strncasecmp(key, pName, key_length) == 0) {
-            // Replace the value, keeping the indentation and a comment behind it in its column
-            comment = strpbrk(strchr(key, '=') + 1, ";#");
-            column = fprintf(out, "%.*s = %s", (int)(key + key_length - line), line, pValue);
-            if (comment != NULL) {
-                fprintf(out, "%*s%s", (int)(comment - line) - column > 1 ? (int)(comment - line) - column : 1, "", comment);
-            } else {
-                fputc('\n', out);
-            }
+            Harness_WriteIniEntry(out, line, key, key_length, pValue);
             written = 1;
             continue;
         }
@@ -929,15 +953,7 @@ int Harness_SaveIniValue(const char* pSection, const char* pName, const char* pV
     if (in != NULL) {
         fclose(in);
     }
-#ifdef _WIN32
-    // rename does not replace an existing file there
-    if (in != NULL) {
-        remove(path);
-    }
-#endif
-    if (fclose(out) != 0 || rename(temp_path, path) != 0) {
-        LOG_WARN2("Cannot write %s", path);
-        remove(temp_path);
+    if (Harness_ReplaceIni(path, temp_path, out, in != NULL)) {
         return 1;
     }
     LOG_INFO("Saved [%s] %s = %s in %s", pSection, pName, pValue, path);
