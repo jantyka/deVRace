@@ -294,7 +294,7 @@ int Harness_Init(int* argc, char* argv[]) {
     // this setting runs physics every frame, smoothing movement out.
     // disabled by default for now until we are happy it doesn't cause other issues
     harness_game_config.physics_per_frame = 0;
-    // Pedestrian spasm fix ([Slop] FixPedSpasm), on in deVRace
+    // Pedestrian spasm fix ([Slop] FixPedSpasm), always on in deVRace
 #ifdef DETHRACE_VR
     harness_game_config.fix_ped_spasm = 1;
 #else
@@ -758,7 +758,10 @@ static int Harness_Ini_Callback(void* user, const char* section, const char* nam
     } else if (MATCH("Slop", "RoundWheels")) {
         harness_game_config.round_wheels = (value[0] == '1');
     } else if (MATCH("Slop", "FixPedSpasm")) {
+#ifndef DETHRACE_VR
+        // deVRace keeps it on: without it pedestrians flicker between poses in the headset
         harness_game_config.fix_ped_spasm = (value[0] == '1');
+#endif
     }
 
     else if (MATCH("Graphics", "Shader")) {

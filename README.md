@@ -58,12 +58,12 @@ Default layout (Xbox names), changeable in `[Gamepad]`:
 
 ### From the dethrace-slop-pack
 
-Taken from [dethrace-slop-pack](https://github.com/TRPB/dethrace-slop-pack) by Tom Butler (the commits keep him as their author). The pedestrian spasm fix is on by default in the VR build, the others are off (the extended draw distance and full detail opponents kept the headset below 144 Hz at times on the test system). All can be switched in the VR options or in `[Slop]`:
+Taken from [dethrace-slop-pack](https://github.com/TRPB/dethrace-slop-pack) by Tom Butler (the commits keep him as their author). The pedestrian spasm fix is always on in the VR build, the others are off (the extended draw distance and full detail opponents kept the headset below 144 Hz at times on the test system); those can be switched in the VR options or in `[Slop]`:
 
 - **Vastly extended draw distance** covering geometry, opponents, pedestrians and powerups (`ExtendDrawDistance`)
 - **Opponent car level of detail always max**, with 10 times the view distance (`OpponentMaxDetail`)
 - **Wheel model rounding**: the octagonal wheels are regenerated with 40 sides as the cars load; the one-sided concave wheels of Hawk II and Roadhog are fixed too (`RoundWheels`)
-- **Pedestrian spasm fix**: no more pedestrians flipping between two poses every frame (`FixPedSpasm`)
+- **Pedestrian spasm fix**: no more pedestrians flipping between two poses every frame (`FixPedSpasm`, always on in the VR build)
 
 The slop pack's other features (widescreen, MSAA and sample rate shading, meld, achievements and more) are not part of deVRace.
 
@@ -189,7 +189,7 @@ FarChase = 1.8     ; far chase camera: distance as a multiple of the normal one 
 ExtendDrawDistance = 0 ; vastly extended draw distance (yon 1000, pedestrians 20 times as far)
 OpponentMaxDetail = 0  ; opponent cars always at full detail, 10 times the view distance
 RoundWheels = 0        ; round wheel models (from the next race on)
-FixPedSpasm = 1        ; pedestrian spasm fix
+FixPedSpasm = 1        ; pedestrian spasm fix (ignored in the VR build, always on there)
 
 [Gamepad]
 Enabled = 1

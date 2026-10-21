@@ -50,7 +50,6 @@ static const struct {
     { "VASTLY EXTENDED DRAW DISTANCE", &harness_game_config.extend_draw_distance, "Slop", "ExtendDrawDistance", VRMenu_ApplyDrawDistance },
     { "OPPONENT CAR LEVEL OF DETAIL ALWAYS MAX", &harness_game_config.opponent_max_detail, "Slop", "OpponentMaxDetail", NULL },
     { "WHEEL MODEL ROUNDING", &harness_game_config.round_wheels, "Slop", "RoundWheels", NULL },
-    { "PEDESTRIAN SPASM FIX", &harness_game_config.fix_ped_spasm, "Slop", "FixPedSpasm", NULL },
     { "SHADER", &harness_game_config.post_shader, "Graphics", "Shader", NULL },
     { "EFFECT", &harness_game_config.post_effect, "Graphics", "PostEffect", NULL, 1 },
 };
