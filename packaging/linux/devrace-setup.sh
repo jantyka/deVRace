@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-VERSION="v0.2.0-alpha"
+VERSION="v1.0.0"
 REPO="jantyka/deVRace"
 STEAM_APPID=282010 # Carmageddon Max Pack
 

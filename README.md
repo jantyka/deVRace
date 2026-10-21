@@ -4,6 +4,8 @@ A Linux VR-Port of dethrace. I always wanted to play my childhood game in VR so 
 
 Testers and people who would like to port it to Windows or the Meta Quest are very welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+**Download:** [deVRace v1.0.0 AppImage](https://github.com/jantyka/deVRace/releases/download/v1.0.0/deVRace-v1.0.0-x86_64.AppImage) and [setup script](https://github.com/jantyka/deVRace/releases/download/v1.0.0/devrace-setup.sh) (Linux, x86_64), see [Installing](#installing-appimage). All versions: [releases](https://github.com/jantyka/deVRace/releases).
+
 ---
 
 deVRace is a fork of [Dethrace](https://github.com/dethrace-labs/dethrace), the reimplementation of the 1997 game [Carmageddon](https://en.wikipedia.org/wiki/Carmageddon). It adds a VR mode through [OpenXR](https://www.khronos.org/openxr/), a gamepad with force feedback, and a few options around them. Without the VR build option it builds and runs like Dethrace.
@@ -84,7 +86,7 @@ The slop pack's other features (widescreen, MSAA and sample rate shading, meld, 
 
 ## Installing (AppImage)
 
-Each [release](https://github.com/jantyka/deVRace/releases) has an AppImage (x86_64) and a setup script. Download both into one folder and run the script:
+Each [release](https://github.com/jantyka/deVRace/releases) has an AppImage (x86_64) and a setup script; the current one is [v1.0.0](https://github.com/jantyka/deVRace/releases/tag/v1.0.0) ([AppImage](https://github.com/jantyka/deVRace/releases/download/v1.0.0/deVRace-v1.0.0-x86_64.AppImage), [devrace-setup.sh](https://github.com/jantyka/deVRace/releases/download/v1.0.0/devrace-setup.sh)). Download both into one folder and run the script:
 
 ```sh
 chmod +x devrace-setup.sh deVRace-*.AppImage
