@@ -1984,7 +1984,7 @@ static int VR_HasBorrowedBonnet(tCar_spec* pCar) {
         }
     }
     if (strcmp(logged_car, pCar->name) != 0) {
-        strncpy(logged_car, pCar->name, sizeof(logged_car) - 1);
+        snprintf(logged_car, sizeof(logged_car), "%s", pCar->name);
         LOG_INFO("VR: car %s, bonnet %s%s", pCar->name, name, borrowed ? " (borrowed, hidden in VR)" : "");
     }
     return borrowed;

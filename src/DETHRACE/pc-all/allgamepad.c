@@ -93,9 +93,12 @@ static int GamepadActionHeld(const tHarness_gamepad_state* pState, tHarness_game
     return 0;
 }
 
+#ifdef DETHRACE_VR
+// Only the VR actions (HUD, recentring) react to the moment a button goes down
 static int GamepadActionPressed(tHarness_gamepad_action pAction) {
     return GamepadActionHeld(&gGamepad, pAction) && !GamepadActionHeld(&gGamepad_previous, pAction);
 }
+#endif
 
 static void GamepadPressKey(int* pKeys, int pMark, int pKey) {
     if (pKey < 0 || pKey >= 123 || gGamepad_key_count >= GAMEPAD_MAX_KEYS) {
