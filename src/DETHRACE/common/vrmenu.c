@@ -86,6 +86,22 @@ static const struct {
     { 1.0f, BR_COLOUR_RGB(41, 49, 49) },
 };
 
+// A mouse area over pRect that selects pChoice
+static void VRMenu_SetMouseArea(tMouse_area* pArea, const tRectile* pRect, int pChoice) {
+    int i;
+
+    for (i = 0; i < 2; i++) {
+        pArea->left[i] = pRect->left[i];
+        pArea->top[i] = pRect->top[i];
+        pArea->right[i] = pRect->right[i];
+        pArea->bottom[i] = pRect->bottom[i];
+    }
+    pArea->new_choice = pChoice;
+    pArea->new_mode = 0;
+    pArea->available_when_typing = 0;
+    pArea->mouse_click = NULL;
+}
+
 #define RECT_LEFT(r) ((r)->left[gGraf_data_index])
 #define RECT_TOP(r) ((r)->top[gGraf_data_index])
 #define RECT_WIDTH(r) ((r)->right[gGraf_data_index] - (r)->left[gGraf_data_index])
@@ -234,18 +250,7 @@ tInterface_spec* VRMenu_OptionsSpec(const tInterface_spec* pOptions_spec) {
     for (i = 0; i < pOptions_spec->number_of_mouse_areas && i < (int)BR_ASIZE(gVR_options_mouse_areas) - 1; i++) {
         gVR_options_mouse_areas[i] = pOptions_spec->mouse_areas[i];
     }
-    gVR_options_mouse_areas[i].left[0] = gVR_button_rect.left[0];
-    gVR_options_mouse_areas[i].left[1] = gVR_button_rect.left[1];
-    gVR_options_mouse_areas[i].top[0] = gVR_button_rect.top[0];
-    gVR_options_mouse_areas[i].top[1] = gVR_button_rect.top[1];
-    gVR_options_mouse_areas[i].right[0] = gVR_button_rect.right[0];
-    gVR_options_mouse_areas[i].right[1] = gVR_button_rect.right[1];
-    gVR_options_mouse_areas[i].bottom[0] = gVR_button_rect.bottom[0];
-    gVR_options_mouse_areas[i].bottom[1] = gVR_button_rect.bottom[1];
-    gVR_options_mouse_areas[i].new_choice = VRMENU_OPTIONS_CHOICE;
-    gVR_options_mouse_areas[i].new_mode = 0;
-    gVR_options_mouse_areas[i].available_when_typing = 0;
-    gVR_options_mouse_areas[i].mouse_click = NULL;
+    VRMenu_SetMouseArea(&gVR_options_mouse_areas[i], &gVR_button_rect, VRMENU_OPTIONS_CHOICE);
     gVR_options_spec.number_of_mouse_areas = i + 1;
     gVR_options_spec.mouse_areas = gVR_options_mouse_areas;
     gVR_options_recopy_areas[0] = gVR_button_rect;
@@ -288,6 +293,11 @@ static void VRMenu_RowRect(int pIndex, tRectile* pRect) {
 // PIXEL BLOOD only while the blood is on, EFFECT only while the shader is on
 static int VRMenu_RowShown(int pIndex) {
     return gVR_options[pIndex].shown_if == NULL || *gVR_options[pIndex].shown_if;
+}
+
+// A row of the options (not DONE)
+static int VRMenu_IsOption(int pChoice) {
+    return pChoice >= 0 && pChoice < (int)BR_ASIZE(gVR_options);
 }
 
 // Next post effect in pDirection (1 or -1) that can be shown now
@@ -368,11 +378,11 @@ static void VRMenu_ApplyDrawDistance(void) {
 static int VRMenu_VROptionsGoAhead(int* pCurrent_choice, int* pCurrent_mode) {
     char value[2];
 
-    if (*pCurrent_choice >= 0 && *pCurrent_choice < (int)BR_ASIZE(gVR_options) && gVR_options[*pCurrent_choice].is_effect) {
+    if (VRMenu_IsOption(*pCurrent_choice) && gVR_options[*pCurrent_choice].is_effect) {
         VRMenu_CycleEffect(*pCurrent_choice, 1);
         return 0;
     }
-    if (*pCurrent_choice >= 0 && *pCurrent_choice < (int)BR_ASIZE(gVR_options)) {
+    if (VRMenu_IsOption(*pCurrent_choice)) {
         *gVR_options[*pCurrent_choice].value = !*gVR_options[*pCurrent_choice].value;
         if (gVR_options[*pCurrent_choice].apply != NULL) {
             gVR_options[*pCurrent_choice].apply();
@@ -387,14 +397,14 @@ static int VRMenu_VROptionsGoAhead(int* pCurrent_choice, int* pCurrent_mode) {
 
 // Up and down skip a hidden row
 static int VRMenu_VROptionsUp(int* pCurrent_choice, int* pCurrent_mode) {
-    if (*pCurrent_choice >= 0 && *pCurrent_choice < (int)BR_ASIZE(gVR_options) && !VRMenu_RowShown(*pCurrent_choice)) {
+    if (VRMenu_IsOption(*pCurrent_choice) && !VRMenu_RowShown(*pCurrent_choice)) {
         (*pCurrent_choice)--;
     }
     return 0;
 }
 
 static int VRMenu_VROptionsDown(int* pCurrent_choice, int* pCurrent_mode) {
-    if (*pCurrent_choice >= 0 && *pCurrent_choice < (int)BR_ASIZE(gVR_options) && !VRMenu_RowShown(*pCurrent_choice)) {
+    if (VRMenu_IsOption(*pCurrent_choice) && !VRMenu_RowShown(*pCurrent_choice)) {
         (*pCurrent_choice)++;
     }
     return 0;
@@ -402,71 +412,69 @@ static int VRMenu_VROptionsDown(int* pCurrent_choice, int* pCurrent_mode) {
 
 // Left and right go through the effects on the effect row
 static int VRMenu_VROptionsLeft(int* pCurrent_choice, int* pCurrent_mode) {
-    if (*pCurrent_choice >= 0 && *pCurrent_choice < (int)BR_ASIZE(gVR_options) && gVR_options[*pCurrent_choice].is_effect) {
+    if (VRMenu_IsOption(*pCurrent_choice) && gVR_options[*pCurrent_choice].is_effect) {
         VRMenu_CycleEffect(*pCurrent_choice, -1);
     }
     return 0;
 }
 
 static int VRMenu_VROptionsRight(int* pCurrent_choice, int* pCurrent_mode) {
-    if (*pCurrent_choice >= 0 && *pCurrent_choice < (int)BR_ASIZE(gVR_options) && gVR_options[*pCurrent_choice].is_effect) {
+    if (VRMenu_IsOption(*pCurrent_choice) && gVR_options[*pCurrent_choice].is_effect) {
         VRMenu_CycleEffect(*pCurrent_choice, 1);
     }
     return 0;
+}
+
+// The keys of the VR options screen: up/down through the rows and DONE, left/right through the
+// effects, confirming switches, escape leaves
+static void VRMenu_SetVROptionsKeys(tInterface_spec* pSpec) {
+    int i;
+
+    for (i = 0; i < 2; i++) {
+        pSpec->move_left_delta[i] = 0;
+        pSpec->move_left_proc[i] = VRMenu_VROptionsLeft;
+        pSpec->move_right_delta[i] = 0;
+        pSpec->move_right_proc[i] = VRMenu_VROptionsRight;
+        pSpec->move_up_new_mode[i] = -1;
+        pSpec->move_up_delta[i] = -1;
+        pSpec->move_up_min[i] = 0;
+        pSpec->move_up_max[i] = VRMENU_CHOICE_DONE;
+        pSpec->move_up_proc[i] = VRMenu_VROptionsUp;
+        pSpec->move_down_new_mode[i] = -1;
+        pSpec->move_down_delta[i] = 1;
+        pSpec->move_down_min[i] = 0;
+        pSpec->move_down_max[i] = VRMENU_CHOICE_DONE;
+        pSpec->move_down_proc[i] = VRMenu_VROptionsDown;
+        pSpec->go_ahead_allowed[i] = 1;
+        pSpec->go_ahead_proc[i] = VRMenu_VROptionsGoAhead;
+        pSpec->escape_allowed[i] = 1;
+        pSpec->escape_proc[i] = NULL;
+    }
+    pSpec->escape_code = VRMENU_CHOICE_DONE;
 }
 
 void VRMenu_DoOptions(const tInterface_spec* pOptions_spec) {
     tMouse_area* mouse_areas = gVR_vr_options_mouse_areas;
     tInterface_spec spec;
     tRectile row;
-    int i;
     int j;
 
     // The options' rows, DONE where the options screen has CANCEL
     for (j = 0; j < (int)BR_ASIZE(gVR_options); j++) {
         VRMenu_RowRect(j, &row);
-        for (i = 0; i < 2; i++) {
-            mouse_areas[j].left[i] = row.left[i];
-            mouse_areas[j].top[i] = row.top[i];
-            mouse_areas[j].right[i] = row.right[i];
-            mouse_areas[j].bottom[i] = row.bottom[i];
-        }
-        mouse_areas[j].new_choice = j;
-        mouse_areas[j].new_mode = 0;
-        mouse_areas[j].available_when_typing = 0;
-        mouse_areas[j].mouse_click = NULL;
+        VRMenu_SetMouseArea(&mouse_areas[j], &row, j);
     }
     mouse_areas[j] = pOptions_spec->mouse_areas[3];
     mouse_areas[j].new_choice = VRMENU_CHOICE_DONE;
 
     spec = *pOptions_spec;
     spec.initial_imode = 0;
-    for (i = 0; i < 2; i++) {
-        spec.move_left_delta[i] = 0;
-        spec.move_left_proc[i] = VRMenu_VROptionsLeft;
-        spec.move_right_delta[i] = 0;
-        spec.move_right_proc[i] = VRMenu_VROptionsRight;
-        spec.move_up_new_mode[i] = -1;
-        spec.move_up_delta[i] = -1;
-        spec.move_up_min[i] = 0;
-        spec.move_up_max[i] = VRMENU_CHOICE_DONE;
-        spec.move_up_proc[i] = VRMenu_VROptionsUp;
-        spec.move_down_new_mode[i] = -1;
-        spec.move_down_delta[i] = 1;
-        spec.move_down_min[i] = 0;
-        spec.move_down_max[i] = VRMENU_CHOICE_DONE;
-        spec.move_down_proc[i] = VRMenu_VROptionsDown;
-        spec.go_ahead_allowed[i] = 1;
-        spec.go_ahead_proc[i] = VRMenu_VROptionsGoAhead;
-        spec.escape_allowed[i] = 1;
-        spec.escape_proc[i] = NULL;
-    }
+    VRMenu_SetVROptionsKeys(&spec);
     spec.exit_proc = NULL;
     spec.draw_proc = VRMenu_DrawVROptions;
     spec.start_proc1 = NULL;
     spec.start_proc2 = NULL;
     spec.done_proc = NULL;
-    spec.escape_code = VRMENU_CHOICE_DONE;
     spec.number_of_button_flics = 0;
     spec.flicker_on_flics = NULL;
     spec.flicker_off_flics = NULL;
