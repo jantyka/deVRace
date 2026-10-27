@@ -1933,6 +1933,42 @@ void VR_Render2DSceneOnHud(void) {
     }
 }
 
+// VR: the same for 3D scenes rendered into a rectangle of the monitor image (the wreck gallery's
+// cars): pArea is that rectangle, a sub-pixelmap of gReal_back_screen. The scene (pRoot seen through
+// pCamera) is rendered into the same rectangle of the HUD quad.
+void VR_RenderSceneOnHud(br_actor* pRoot, br_actor* pCamera, br_pixelmap* pArea) {
+    // glrend cannot free sub-pixelmaps, so the HUD's one is kept and only made anew for a new area
+    static br_pixelmap* hud_area;
+    static br_pixelmap* hud_area_parent;
+    static br_rectangle area_rect;
+    br_pixelmap* colour;
+    br_pixelmap* depth;
+    float scale;
+
+    if (!VR_GetHudTarget(&colour, &depth)) {
+        return;
+    }
+    if (hud_area == NULL || hud_area_parent != colour || area_rect.x != pArea->base_x || area_rect.y != pArea->base_y
+        || area_rect.w != pArea->width || area_rect.h != pArea->height) {
+        scale = colour->width / (float)gReal_back_screen->width;
+        hud_area = BrPixelmapAllocateSub(colour, pArea->base_x * scale, pArea->base_y * scale,
+            pArea->width * scale, pArea->height * scale);
+        if (hud_area == NULL) {
+            return;
+        }
+        hud_area_parent = colour;
+        area_rect.x = pArea->base_x;
+        area_rect.y = pArea->base_y;
+        area_rect.w = pArea->width;
+        area_rect.h = pArea->height;
+        hud_area->origin_x = hud_area->width / 2;
+        hud_area->origin_y = hud_area->height / 2;
+    }
+    BrZbSceneRenderBegin(gUniverse_actor, pCamera, hud_area, depth);
+    BrZbSceneRenderAdd(pRoot);
+    BrZbSceneRenderEnd();
+}
+
 // VR: background colour of the eye images, as ConditionallyFillWithSky picks it for the regular pass
 // on tracks without a sky texture (or inside special volumes with their own sky colour): the fog
 // colour, the volume's sky colour or black. With a sky texture the sky covers the background anyway.

@@ -188,6 +188,8 @@ void RenderAFrame(int pDepth_mask_on);
 
 #ifdef DETHRACE_VR
 void VR_Render2DSceneOnHud(void);
+
+void VR_RenderSceneOnHud(br_actor* pRoot, br_actor* pCamera, br_pixelmap* pArea);
 #endif
 
 void InitPaletteAnimate(void);

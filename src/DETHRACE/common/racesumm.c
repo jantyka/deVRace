@@ -1003,6 +1003,10 @@ void DamageScrnDraw(int pCurrent_choice, int pCurrent_mode) {
         BrZbSceneRenderBegin(gUniverse_actor, gWreck_camera, gWreck_render_area, gWreck_z_buffer);
         BrZbSceneRenderAdd(gWreck_root);
         BrZbSceneRenderEnd();
+#ifdef DETHRACE_VR
+        // VR: the cars are a 3D scene the HUD quad's capture of the 2D overlay misses
+        VR_RenderSceneOnHud(gWreck_root, gWreck_camera, gWreck_render_area);
+#endif
         PDLockRealBackScreen(1);
     }
 #endif
