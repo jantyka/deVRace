@@ -4,7 +4,7 @@ A Linux VR-Port of dethrace. I always wanted to play my childhood game in VR so 
 
 Testers and people who would like to port it to Windows or the Meta Quest are very welcome, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-**Download:** [deVRace v1.0.0 AppImage](https://github.com/jantyka/deVRace/releases/download/v1.0.0/deVRace-v1.0.0-x86_64.AppImage) and [setup script](https://github.com/jantyka/deVRace/releases/download/v1.0.0/devrace-setup.sh) (Linux, x86_64), see [Installing](#installing-appimage). All versions: [releases](https://github.com/jantyka/deVRace/releases).
+**Download:** [deVRace v1.1.0 AppImage](https://github.com/jantyka/deVRace/releases/download/v1.1.0/deVRace-v1.1.0-x86_64.AppImage) and [setup script](https://github.com/jantyka/deVRace/releases/download/v1.1.0/devrace-setup.sh) (Linux, x86_64), see [Installing](#installing-appimage). All versions: [releases](https://github.com/jantyka/deVRace/releases).
 
 ---
 
@@ -24,6 +24,8 @@ The original Dethrace README is in [docs/README.dethrace.md](docs/README.dethrac
 - **Menus and HUD on a panel** in front of you (OpenXR quad layer). In the race the HUD floats over the 3D view; every HUD element can be switched on and off.
 - **Far chase camera** as in other racing games: the view key cycles cockpit, chase and far chase view (`FarChase`).
 - **Recenter** the view with the gamepad (right stick press), in the race and in the menus, or from SteamVR's menu.
+- **Still camera after the race**: the chase camera no longer circles the car and bobs up and down once you have won or are wrecked; turn it around the car yourself with the right stick.
+- **Wreck gallery with the cars**: the damage screen after the race shows the 3D wrecks on the panel too (they were only drawn on the monitor).
 - **Blood on the lens** when you run over pedestrians at speed: drips run down the lens in the chase views (smaller and fewer in the far one); in the cockpit the airstream pushes it up the windscreen and to the outside of a turn. Moving the mouse too fast in the menus splatters some too. With pixel blood on (`PIXEL BLOOD` in the VR options, `[VR] BloodPixel`), the splatters are the game's own gib sprites instead, turned at random, with their big pixels and without drips or trails.
 - **Rear view mirror** in the cockpit view, as a rectangle right below the race timer (`Mirror`).
 - **Graphics options at their best** on each start (`MaxDetail`).
@@ -55,7 +57,7 @@ Default layout (Xbox names), changeable in `[Gamepad]`:
 | Right stick press | VR: recenter the view | VR: recenter the view |
 | View (Back) | Cockpit / chase / far chase view | |
 | Start | Menu | Back |
-| Right stick left / up / right | Look left / forward / right | |
+| Right stick left / up / right | Look left / forward / right; VR, after the race: turn the chase camera (left / right) | |
 | D-pad down | VR: all HUD elements on/off | Navigate |
 | D-pad up | VR: info field at the top (time, laps, credits, messages) on/off | Navigate |
 | D-pad left | VR: driver avatar (pratcam) on/off | Navigate |
@@ -86,7 +88,7 @@ The slop pack's other features (widescreen, MSAA and sample rate shading, meld, 
 
 ## Installing (AppImage)
 
-Each [release](https://github.com/jantyka/deVRace/releases) has an AppImage (x86_64) and a setup script; the current one is [v1.0.0](https://github.com/jantyka/deVRace/releases/tag/v1.0.0) ([AppImage](https://github.com/jantyka/deVRace/releases/download/v1.0.0/deVRace-v1.0.0-x86_64.AppImage), [devrace-setup.sh](https://github.com/jantyka/deVRace/releases/download/v1.0.0/devrace-setup.sh)). Download both into one folder and run the script:
+Each [release](https://github.com/jantyka/deVRace/releases) has an AppImage (x86_64) and a setup script; the current one is [v1.1.0](https://github.com/jantyka/deVRace/releases/tag/v1.1.0) ([AppImage](https://github.com/jantyka/deVRace/releases/download/v1.1.0/deVRace-v1.1.0-x86_64.AppImage), [devrace-setup.sh](https://github.com/jantyka/deVRace/releases/download/v1.1.0/devrace-setup.sh)). Download both into one folder and run the script:
 
 ```sh
 chmod +x devrace-setup.sh deVRace-*.AppImage
@@ -232,7 +234,7 @@ RumblePedestrian = 0.35
 RumbleCar = 1.0
 ```
 
-Environment variables for debugging: `DEVRACE_VR_DEBUG=1` (per-eye diagnostics), `DEVRACE_VR_DUMP_FRAMES=<dir>` (eye images as PPM), `DEVRACE_GAMEPAD_DEBUG=1` (gamepad buttons), `DEVRACE_SHADER_DIR=<dir>` (load the post effect shaders from there and reload them when they change), `DEVRACE_POSTFX_TIMING=1` (GPU time of the post effects). To test without a headset, point `XR_RUNTIME_JSON` to Monado's runtime manifest and run Monado with its simulated (Qwerty) headset.
+Environment variables for debugging: `DEVRACE_VR_DEBUG=1` (per-eye diagnostics), `DEVRACE_VR_DUMP_FRAMES=<dir>` (eye images as PPM), `DEVRACE_GAMEPAD_DEBUG=1` (gamepad buttons), `DEVRACE_SHADER_DIR=<dir>` (load the post effect shaders from there and reload them when they change), `DEVRACE_POSTFX_TIMING=1` (GPU time of the post effects), `DEVRACE_TEST_FINISH_RACE=<seconds>` (VR build: a single player race is won after that many seconds, to test the end of the race and the summary screens). To test without a headset, point `XR_RUNTIME_JSON` to Monado's runtime manifest and run Monado with its simulated (Qwerty) headset.
 
 ## Known issues
 
