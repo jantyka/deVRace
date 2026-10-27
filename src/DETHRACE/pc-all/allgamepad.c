@@ -128,6 +128,14 @@ static void GamepadRaceKeys(int* pKeys, int pMark) {
     size_t i;
 
     for (i = 0; i < COUNT_OF(gGamepad_key_actions); i++) {
+#ifdef DETHRACE_VR
+        // VR: after the race the right stick turns the camera (PDGamepadCameraTurn), so looking
+        // left and right is left out then
+        if (gRace_finished && VR_IsActive()
+            && (gGamepad_key_actions[i].action == eGamepad_action_look_left || gGamepad_key_actions[i].action == eGamepad_action_look_right)) {
+            continue;
+        }
+#endif
         if (GamepadActionHeld(&gGamepad, gGamepad_key_actions[i].action)) {
             GamepadPressKey(pKeys, pMark, gKey_mapping[gGamepad_key_actions[i].function]);
         }
@@ -239,6 +247,22 @@ static float GamepadAxis(tHarness_gamepad_axis pAxis) {
         return 0.f;
     }
 }
+
+#ifdef DETHRACE_VR
+float PDGamepadCameraTurn(void) {
+    float deadzone = harness_game_config.gamepad_config.deadzone;
+    float x;
+
+    if (!harness_game_config.gamepad || !gGamepad.connected || deadzone >= 1.f) {
+        return 0.f;
+    }
+    x = gGamepad.right_x;
+    if (fabsf(x) < deadzone) {
+        return 0.f;
+    }
+    return (x - (x > 0.f ? deadzone : -deadzone)) / (1.f - deadzone);
+}
+#endif
 
 // Analog steering and pedals, applied over the keyboard's car controls unless the keyboard steers
 // or pedals itself. Values as the original joystick code produced them (car.c, ControlCar*).

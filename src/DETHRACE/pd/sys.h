@@ -74,6 +74,11 @@ typedef enum tGamepad_rumble {
 } tGamepad_rumble;
 // pStrength 0..1, used for car crashes
 void PDGamepadRumble(tGamepad_rumble pKind, float pStrength);
+#ifdef DETHRACE_VR
+// VR: the right stick's sideways deflection (-1 left .. 1 right, 0 within the dead zone), for turning
+// the camera after the race
+float PDGamepadCameraTurn(void);
+#endif
 
 int PDGetASCIIFromKey(int pKey);
 

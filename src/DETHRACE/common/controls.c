@@ -2082,8 +2082,12 @@ void PollCameraControls(tU32 pTime_difference) {
     swirl_mode = gRace_finished && !gAction_replay_mode && (&gProgram_state.current_car == gCar_to_view || gCar_to_view->knackered);
 #ifdef DETHRACE_VR
     // VR: after the race the chase camera stays where it is instead of circling the car and moving
-    // up and down, which makes the headset sickening
+    // up and down, which makes the headset sickening. The right stick turns it around the car
+    // instead, at most as fast as the camera keys.
     if (VR_IsActive()) {
+        if (swirl_mode && !gProgram_state.cockpit_on && !gMap_mode) {
+            gCamera_yaw += BrDegreeToAngle(pTime_difference * 0.05f * (gCamera_sign ? -1.f : 1.f) * PDGamepadCameraTurn());
+        }
         swirl_mode = 0;
     }
 #endif
