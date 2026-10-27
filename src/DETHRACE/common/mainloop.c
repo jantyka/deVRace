@@ -559,6 +559,29 @@ int MungeRaceFinished(void) {
     return PDKeyDown(KEY_RETURN) || PDKeyDown(KEY_KP_ENTER);
 }
 
+#ifdef DETHRACE_VR
+// VR test helper: with DEVRACE_TEST_FINISH_RACE=<seconds> a single player race is won after that
+// many seconds of race time, to get to the end of the race and the summary screens (wreck gallery)
+// without driving it
+static void VR_TestFinishRace(void) {
+    static int seconds = -1;
+    const char* env;
+
+    if (seconds < 0) {
+        env = getenv("DEVRACE_TEST_FINISH_RACE");
+        seconds = env != NULL ? atoi(env) : 0;
+        if (seconds > 0) {
+            LOG_INFO("Test: races are won after %d s", seconds);
+        }
+    }
+    if (seconds > 0 && gNet_mode == eNet_mode_none && !gRace_finished && !gCountdown && !gAction_replay_mode
+        && GetRaceTime() >= (tU32)seconds * 1000) {
+        LOG_INFO2("%s", "Test: race won");
+        RaceCompleted(eRace_over_laps);
+    }
+}
+#endif
+
 // IDA: tRace_result __cdecl MainGameLoop()
 // FUNCTION: CARM95 0x0046fe77
 tRace_result MainGameLoop(void) {
@@ -633,6 +656,9 @@ tRace_result MainGameLoop(void) {
             MungeOpponents(gFrame_period);
             PollCarControls(gFrame_period);
         }
+#ifdef DETHRACE_VR
+        VR_TestFinishRace();
+#endif
         PollCameraControls(camera_period);
         if (!gAction_replay_mode) {
             ControlOurCar(gFrame_period);
