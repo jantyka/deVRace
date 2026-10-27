@@ -12,6 +12,9 @@
 // Non-zero when the headset wants eye images for the current frame
 int VR_WantsEyeImages(void);
 
+// Non-zero while a VR session runs, also in frames the headset skips (unlike VR_WantsEyeImages)
+int VR_IsActive(void);
+
 // Render target of an eye, created from the screen pixelmap on first use. Call right before
 // rendering the eye: the image is only handed to the headset if this was called during the frame.
 // Returns 0 if no render target could be created.

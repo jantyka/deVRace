@@ -938,6 +938,10 @@ int VR_WantsEyeImages(void) {
     return vr_state == eVR_state_active && frame_begun && frame_state.shouldRender && views_valid;
 }
 
+int VR_IsActive(void) {
+    return vr_state == eVR_state_active;
+}
+
 int VR_BeginEye(int pEye, br_pixelmap* pScreen, br_pixelmap** pColour, br_pixelmap** pDepth) {
     tVR_eye_target* target = &eye_targets[pEye];
     tVR_eye_swapchain* eye = &eye_swapchains[pEye];

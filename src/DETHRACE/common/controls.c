@@ -39,6 +39,7 @@
 #include <stdlib.h>
 
 #ifdef DETHRACE_VR
+#include "harness/vr.h"
 static void VR_CycleCameraView(void);
 #endif
 
@@ -2079,6 +2080,13 @@ void PollCameraControls(tU32 pTime_difference) {
 
     flag = 0;
     swirl_mode = gRace_finished && !gAction_replay_mode && (&gProgram_state.current_car == gCar_to_view || gCar_to_view->knackered);
+#ifdef DETHRACE_VR
+    // VR: after the race the chase camera stays where it is instead of circling the car and moving
+    // up and down, which makes the headset sickening
+    if (VR_IsActive()) {
+        swirl_mode = 0;
+    }
+#endif
     up_and_down_mode = swirl_mode && !gCamera_has_collided;
     going_up = gCamera_zoom > 1.0f;
     if (last_swirl_mode != swirl_mode) {
