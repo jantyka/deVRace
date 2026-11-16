@@ -431,6 +431,11 @@ void PDAllocateScreenAndBack(void) {
         gInterpolate_textures = 1;
         gUse_mip_maps = 1;
         gTextures_need_powers_of_2 = 1;
+#ifdef DETHRACE_VR
+        // VR: glrend takes textures of any size. Resampling the sprites to powers
+        // of two (PurifiedPixelmap) changes their drawn size from frame to frame.
+        gTextures_need_powers_of_2 = 0;
+#endif
         gMax_texture_aspect_ratio = 8;
         gMax_texture_side = 256;
         gBlitting_is_slow = 1;
