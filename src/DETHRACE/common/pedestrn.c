@@ -377,8 +377,12 @@ void InitPedGibs(void) {
             }
 #ifdef DETHRACE_VR
             // VR: the same sprites can splatter onto the lens ([VR] BloodPixel); always by the
-            // normal name, also when the sausage eater mode loaded the G... ones
+            // normal name, also when the sausage eater mode loaded the G... ones.
+            // Copies the pixels, so it runs before the pixelmap may be purified below.
             VR_SetBloodSprite(gPed_gib_names[i][j], the_pix, gRender_palette);
+#endif
+#ifdef DETHRACE_3DFX_PATCH
+            the_pix = PurifiedPixelmap(the_pix);
 #endif
             BrMapAdd(the_pix);
             gPed_gib_materials[i].count = gPed_size_counts[i];
@@ -475,8 +479,8 @@ void MungeModelSize(br_actor* pActor, br_scalar pScaling_factor) {
     br_scalar half_height;
 
     the_pix = pActor->material->colour_map;
-    half_width = (the_pix->width / 2) * pScaling_factor * gPed_scale_factor;
-    half_height = (the_pix->height / 2) * pScaling_factor * gPed_scale_factor;
+    half_width = DR_FF((the_pix->width / 2) * pScaling_factor) * gPed_scale_factor;
+    half_height = DR_FF((the_pix->height / 2) * pScaling_factor) * gPed_scale_factor;
     PedModelUpdate(pActor->model,
         -half_width, -half_height,
         -half_width, half_height,
@@ -997,7 +1001,7 @@ void MungePedestrianSequence(tPedestrian_data* pPedestrian, int pAction_changed)
                     }
                 }
 #endif
-                sequence_ptr = &pPedestrian->sequences[the_sequence];
+                sequence_ptr = &((tPedestrian_sequence*)DR_FF_PTR(pPedestrian->sequences))[the_sequence];
                 current_looping = pPedestrian->sequences[pPedestrian->current_sequence].looping_frame_start;
                 if (pAction_changed || current_looping > pPedestrian->current_frame) {
                     pPedestrian->current_frame = -1;
@@ -3022,6 +3026,9 @@ void CreatePedestrian(FILE* pG, tPedestrian_instruction* pInstructions, int pIns
                         if (the_sequence->frames[k].pixelmap == NULL) {
                             FatalError(kFatalError_FindPedestrianPixelmap_S, s2);
                         }
+#ifdef DETHRACE_3DFX_PATCH
+                        the_sequence->frames[k].pixelmap = PurifiedPixelmap(the_sequence->frames[k].pixelmap);
+#endif
                         BrMapAdd(the_sequence->frames[k].pixelmap);
                     }
                     GetALineAndDontArgue(pG, s2);
